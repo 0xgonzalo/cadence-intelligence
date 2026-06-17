@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getTrackStats } from "@/lib/partners/songstats";
+import { getEvents } from "@/lib/partners/jambase";
 import { detectOpportunities } from "@/lib/signal/momentum";
 import type { MomentumSignal, Thresholds } from "@/lib/domain/types";
 import type { Json } from "@/lib/supabase/types";
@@ -55,13 +56,21 @@ export async function POST(request: Request) {
     (configs ?? []).map((c) => [c.artist_id, thresholdsFrom(c.thresholds)]),
   );
 
-  // Skip re-raising opportunities for a (track, market) that's already open.
+  // Skip re-raising opportunities that are already open. Momentum opps are keyed
+  // per (track, market); event-driven opps (no track) per (artist, market).
   const { data: open } = await supabase
     .from("content_opportunities")
-    .select("track_id, market")
+    .select("artist_id, track_id, market")
     .in("status", ["new", "in_progress"]);
   const openKeys = new Set(
-    (open ?? []).map((o) => `${o.track_id}|${o.market}`),
+    (open ?? [])
+      .filter((o) => o.track_id)
+      .map((o) => `${o.track_id}|${o.market}`),
+  );
+  const openEventKeys = new Set(
+    (open ?? [])
+      .filter((o) => !o.track_id)
+      .map((o) => `${o.artist_id}|${o.market}`),
   );
 
   let polled = 0;
@@ -151,5 +160,76 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ data: { polled, opportunities } });
+  // Event-driven triggers: an upcoming show in a market is its own reason to
+  // publish, independent of streaming momentum. One opportunity per
+  // (artist, market) with a future show that isn't already being worked.
+  const { data: artists } = await supabase.from("artists").select("id, name");
+
+  let events = 0;
+  let eventOpportunities = 0;
+
+  for (const artist of artists ?? []) {
+    if (!artist.name) continue;
+
+    let upcoming;
+    try {
+      upcoming = await getEvents(artist.name);
+    } catch (err) {
+      await supabase.from("agent_log").insert({
+        artist_id: artist.id,
+        level: "error",
+        phase: "WATCH",
+        message: `JamBase poll failed for ${artist.name}`,
+        payload: { error: err instanceof Error ? err.message : String(err) },
+      });
+      continue;
+    }
+    events += upcoming.length;
+
+    for (const ev of upcoming) {
+      if (!ev.market) continue;
+      const key = `${artist.id}|${ev.market}`;
+      if (openEventKeys.has(key)) continue;
+
+      const where = ev.venue
+        ? `${ev.venue}, ${ev.market}`
+        : ev.city
+          ? `${ev.city}, ${ev.market}`
+          : ev.market;
+      const reason = `Upcoming show: ${ev.name} — ${where} (${ev.date.slice(0, 10)})`;
+
+      const { error: insError } = await supabase
+        .from("content_opportunities")
+        .insert({
+          artist_id: artist.id,
+          track_id: null,
+          reason,
+          market: ev.market,
+          status: "new",
+        });
+      if (insError) continue;
+
+      openEventKeys.add(key);
+      eventOpportunities++;
+
+      await supabase.from("agent_log").insert({
+        artist_id: artist.id,
+        level: "info",
+        phase: "DETECT",
+        message: reason,
+        payload: {
+          source: "jambase",
+          event: ev.name,
+          venue: ev.venue,
+          city: ev.city,
+          market: ev.market,
+          date: ev.date,
+        } as unknown as Json,
+      });
+    }
+  }
+
+  return NextResponse.json({
+    data: { polled, opportunities, events, eventOpportunities },
+  });
 }
