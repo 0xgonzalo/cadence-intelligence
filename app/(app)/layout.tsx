@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { NavLinks } from "@/components/nav-links";
-import { cn } from "@/lib/utils";
+import { ModeToggle } from "@/components/mode-toggle";
 
 export default function AppLayout({
   children,
@@ -34,23 +34,6 @@ export default function AppLayout({
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>
-    </div>
-  );
-}
-
-/** Artist ↔ Label scope toggle. Label mode is stubbed until Phase 7. */
-function ModeToggle() {
-  return (
-    <div className="flex items-center rounded-lg border border-border p-0.5 font-mono text-[10px] uppercase tracking-[0.18em]">
-      <span className="rounded-md bg-secondary px-2.5 py-1 text-foreground">
-        Artist
-      </span>
-      <span
-        className={cn("px-2.5 py-1 text-muted-foreground/50")}
-        title="Label mode arrives in Phase 7"
-      >
-        Label
-      </span>
     </div>
   );
 }

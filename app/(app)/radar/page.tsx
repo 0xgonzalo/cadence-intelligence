@@ -26,14 +26,28 @@ function parseDelta(raw: unknown): DeltaShape {
   };
 }
 
-export default async function RadarPage() {
+export default async function RadarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ artist?: string }>;
+}) {
+  const { artist } = await searchParams;
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  let query = supabase
     .from("content_opportunities")
     .select(
       "id, reason, market, language, status, signal_delta, detected_at, tracks(title, isrc)",
     )
     .order("detected_at", { ascending: false });
+  if (artist) query = query.eq("artist_id", artist);
+
+  const { data, error } = await query;
+
+  const artistName = artist
+    ? (await supabase.from("artists").select("name").eq("id", artist).maybeSingle())
+        .data?.name ?? null
+    : null;
 
   const opportunities: RadarOpportunity[] = (data ?? []).map((row) => ({
     id: row.id,
@@ -51,10 +65,22 @@ export default async function RadarPage() {
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-6">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-            Content Radar
+            {artistName ? (
+              <>
+                Content Radar ·{" "}
+                <Link
+                  href="/roster"
+                  className="text-foreground underline-offset-4 hover:underline"
+                >
+                  all artists
+                </Link>
+              </>
+            ) : (
+              "Content Radar"
+            )}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            Rising in your catalog
+            {artistName ? `Rising for ${artistName}` : "Rising in your catalog"}
           </h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             The agent watches momentum across markets and surfaces the moments
