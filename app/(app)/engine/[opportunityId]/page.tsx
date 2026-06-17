@@ -3,6 +3,10 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { BriefView, type BriefRow } from "@/components/engine/BriefView";
+import {
+  PackagePreview,
+  type PackageAssets,
+} from "@/components/engine/PackagePreview";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +54,12 @@ export default async function ContentEnginePage({
     copy: parseCopy(b.copy),
   }));
 
+  const { data: pkg } = await supabase
+    .from("content_packages")
+    .select("status, assets")
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+
   const title = opp.tracks?.title ?? opp.tracks?.isrc ?? "Untitled track";
 
   return (
@@ -80,6 +90,13 @@ export default async function ContentEnginePage({
       </div>
 
       <BriefView opportunityId={opportunityId} briefs={briefs} />
+
+      <PackagePreview
+        opportunityId={opportunityId}
+        status={pkg?.status ?? null}
+        assets={(pkg?.assets ?? null) as PackageAssets}
+        hasBriefs={briefs.length > 0}
+      />
     </div>
   );
 }

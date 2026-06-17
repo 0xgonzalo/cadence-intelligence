@@ -153,16 +153,6 @@ export function BriefView({
           ))}
         </div>
       )}
-
-      <Card className="border-dashed p-5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
-          Content Package
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Stems, voiceover and a lyric clip assemble here once the asset layer
-          ships (Phase 4).
-        </p>
-      </Card>
     </div>
   );
 }
