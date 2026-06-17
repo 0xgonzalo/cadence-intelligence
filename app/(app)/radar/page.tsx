@@ -126,6 +126,12 @@ function EmptyState() {
         Onboard an artist and run a signal poll. As momentum accelerates,
         opportunities will appear here automatically.
       </p>
+      <Link
+        href="/onboard"
+        className="mt-2 rounded-lg border border-border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-foreground transition-colors hover:bg-secondary"
+      >
+        Onboard an artist
+      </Link>
     </div>
   );
 }

@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/radar", label: "Radar" },
   { href: "/catalog", label: "Catalog" },
   { href: "/agent", label: "Agent" },
+  { href: "/onboard", label: "Onboard" },
 ];
 
 export function NavLinks() {
