@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   OpportunityCard,
@@ -74,11 +75,13 @@ export default async function RadarPage() {
       ) : (
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {opportunities.map((opportunity, i) => (
-            <OpportunityCard
+            <Link
               key={opportunity.id}
-              opportunity={opportunity}
-              index={i}
-            />
+              href={`/engine/${opportunity.id}`}
+              className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <OpportunityCard opportunity={opportunity} index={i} />
+            </Link>
           ))}
         </div>
       )}
