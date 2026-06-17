@@ -31,3 +31,6 @@ export function createServiceClient() {
     { cookies: { getAll: () => [], setAll: () => {} } },
   );
 }
+
+/** A typed Supabase client (RLS-bound or service-role — both share this type). */
+export type DbClient = ReturnType<typeof createServiceClient>;
