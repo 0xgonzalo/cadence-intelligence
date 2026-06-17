@@ -87,6 +87,12 @@ export default async function ContentEnginePage({
           ) : null}
           <Badge variant="outline">{opp.status}</Badge>
         </div>
+        <Link
+          href={`/collab/${opportunityId}`}
+          className="mt-4 inline-flex font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Collab Radar →
+        </Link>
       </div>
 
       <BriefView opportunityId={opportunityId} briefs={briefs} />
