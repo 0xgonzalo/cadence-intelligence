@@ -96,7 +96,11 @@ export default async function RosterPage() {
       ) : (
         <ol className="mt-8 flex flex-col gap-2">
           {roster.map((row, i) => (
-            <li key={row.id}>
+            <li
+              key={row.id}
+              className="animate-rise"
+              style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
+            >
               <Link
                 href={`/radar?artist=${row.id}`}
                 className="group flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 outline-none transition-colors hover:border-foreground/30 focus-visible:ring-2 focus-visible:ring-ring"

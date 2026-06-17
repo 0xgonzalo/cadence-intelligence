@@ -128,6 +128,20 @@
   html {
     @apply font-sans;
   }
+  /* Brutalist signature: hard inverted selection. */
+  ::selection {
+    background: var(--foreground);
+    color: var(--background);
+  }
+  /* Instrument-grade numerals so every mono stat readout aligns column-true. */
+  .font-mono {
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
 }
 
 /* Staggered card entrance + live-signal pulse (Content Radar). */
