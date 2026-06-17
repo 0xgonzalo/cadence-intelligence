@@ -1,0 +1,138 @@
+{
+  "name": "CADENCE Agent Loop",
+  "meta": {
+    "description": "Autonomous WATCH->DETECT->ANALYZE->GENERATE->PACKAGE->SURFACE loop for CADENCE. On a schedule it polls Songstats momentum (/api/signal/poll), runs the newest detected opportunity end-to-end (/api/agent/run), then compiles + pushes the weekly plan (/api/agent/weekly). Requires two n8n environment variables: APP_BASE_URL (e.g. https://cadence.example.com) and CRON_SECRET (must match the app's CRON_SECRET). Fallback if n8n is unavailable: a Vercel Cron hitting the same three endpoints with the same Bearer secret."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_BASE_URL }}/api/signal/poll",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.CRON_SECRET }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "poll-signals",
+      "name": "WATCH+DETECT /api/signal/poll",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_BASE_URL }}/api/agent/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.CRON_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "run-opportunity",
+      "name": "RUN newest /api/agent/run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_BASE_URL }}/api/agent/weekly",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.CRON_SECRET }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "weekly-plan",
+      "name": "SURFACE /api/agent/weekly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Every 6h": {
+      "main": [
+        [
+          {
+            "node": "WATCH+DETECT /api/signal/poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WATCH+DETECT /api/signal/poll": {
+      "main": [
+        [
+          {
+            "node": "RUN newest /api/agent/run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RUN newest /api/agent/run": {
+      "main": [
+        [
+          {
+            "node": "SURFACE /api/agent/weekly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": ["cadence"]
+}
