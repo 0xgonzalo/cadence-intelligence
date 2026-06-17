@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout, safeFetch } from "@/lib/http";
 import {
   uploadAudio,
   requestSplit,
@@ -7,8 +7,12 @@ import {
   pollSplit,
 } from "@/lib/partners/lalal";
 
-vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
+vi.mock("@/lib/http", () => ({
+  fetchWithTimeout: vi.fn(),
+  safeFetch: vi.fn(),
+}));
 const mockFetch = vi.mocked(fetchWithTimeout);
+const mockSafeFetch = vi.mocked(safeFetch);
 
 function jsonResponse(body: unknown): Response {
   return {
@@ -22,6 +26,7 @@ function jsonResponse(body: unknown): Response {
 
 beforeEach(() => {
   mockFetch.mockReset();
+  mockSafeFetch.mockReset();
   process.env.LALAL_API_KEY = "test-key";
 });
 
@@ -50,21 +55,21 @@ describe("lalal adapter", () => {
       expect(headers.Authorization).toBe("license test-key");
     });
 
-    it("fetches a URL's bytes before uploading", async () => {
-      mockFetch
-        .mockResolvedValueOnce(jsonResponse({})) // the audio download
-        .mockResolvedValueOnce(
-          jsonResponse({ status: "success", id: "file-xyz" }),
-        );
+    it("fetches a URL's bytes (SSRF-guarded) before uploading", async () => {
+      mockSafeFetch.mockResolvedValueOnce(jsonResponse({})); // the audio download
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ status: "success", id: "file-xyz" }),
+      );
 
       const id = await uploadAudio("https://cdn.example.com/song.mp3");
 
       expect(id).toBe("file-xyz");
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(mockFetch.mock.calls[0][0]).toBe(
+      expect(mockSafeFetch).toHaveBeenCalledTimes(1);
+      expect(mockSafeFetch.mock.calls[0][0]).toBe(
         "https://cdn.example.com/song.mp3",
       );
-      expect(mockFetch.mock.calls[1][0]).toContain("/api/upload/");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toContain("/api/upload/");
     });
 
     it("throws when LALAL reports an upload error", async () => {

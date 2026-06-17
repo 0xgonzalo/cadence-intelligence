@@ -3,7 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { uploadAudio, requestSplit, pollSplit } from "@/lib/partners/lalal";
 import { tts, DEFAULT_VOICE_ID } from "@/lib/partners/elevenlabs";
 import { getRichsync } from "@/lib/partners/musixmatch";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout, assertSafeUrl } from "@/lib/http";
 import type { Json } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -141,6 +141,18 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // Reject SSRF-prone audio URLs before any server-side fetch (https-only,
+  // public hosts). safeFetch re-checks each redirect hop downstream.
+  if (audioUrl) {
+    try {
+      await assertSafeUrl(audioUrl);
+    } catch (e) {
+      return NextResponse.json(
+        { error: `invalid audioUrl: ${errMsg(e)}` },
+        { status: 400 },
+      );
+    }
+  }
 
   // RLS scopes this to the signed-in user's own catalog.
   const { data: opp, error: oppErr } = await supabase
@@ -162,6 +174,8 @@ export async function POST(request: Request) {
   const briefs = (opp.briefs ?? []) as BriefRow[];
   const service = createServiceClient();
   const results: Record<string, Json> = {};
+  // Build storage paths from the DB-trusted id, never the raw request value.
+  const oppId = opp.id;
 
   // --- stems (one LALAL split yields acapella + instrumental) --------------
   const wantInstrumental = requested.includes("instrumental");
@@ -180,7 +194,7 @@ export async function POST(request: Request) {
           const bytes = await downloadBytes(split.backUrl);
           results.instrumental = await storeAudio(
             service,
-            `${opportunityId}/instrumental.wav`,
+            `${oppId}/instrumental.wav`,
             bytes,
             "audio/wav",
           );
@@ -189,7 +203,7 @@ export async function POST(request: Request) {
           const bytes = await downloadBytes(split.stemUrl);
           results.acapella = await storeAudio(
             service,
-            `${opportunityId}/acapella.wav`,
+            `${oppId}/acapella.wav`,
             bytes,
             "audio/wav",
           );
@@ -214,7 +228,7 @@ export async function POST(request: Request) {
         const bytes = await tts(text, DEFAULT_VOICE_ID, lang);
         const stored = await storeAudio(
           service,
-          `${opportunityId}/voiceover-${lang ?? "src"}.mp3`,
+          `${oppId}/voiceover-${lang ?? "src"}.mp3`,
           bytes,
           "audio/mpeg",
         );
@@ -264,12 +278,12 @@ export async function POST(request: Request) {
   await supabase
     .from("content_packages")
     .delete()
-    .eq("opportunity_id", opportunityId);
+    .eq("opportunity_id", oppId);
 
   const { data: pkg, error: insErr } = await supabase
     .from("content_packages")
     .insert({
-      opportunity_id: opportunityId,
+      opportunity_id: oppId,
       status: producedAny ? "ready" : "draft",
       assets: results as Json,
     })
@@ -283,7 +297,7 @@ export async function POST(request: Request) {
     await supabase
       .from("content_opportunities")
       .update({ status: "ready" })
-      .eq("id", opportunityId);
+      .eq("id", oppId);
   }
 
   return NextResponse.json({ data: pkg });

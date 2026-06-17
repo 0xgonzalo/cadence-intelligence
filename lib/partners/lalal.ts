@@ -13,7 +13,7 @@
  * state (the mw3-club polling pattern) — see `pollSplit` and Task 4.1 in the plan.
  */
 import { z } from "zod";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout, safeFetch } from "@/lib/http";
 
 const BASE_URL = "https://www.lalal.ai/api";
 
@@ -55,7 +55,8 @@ const UploadResponseSchema = z
 
 async function toBytes(file: ArrayBuffer | Uint8Array | string): Promise<ArrayBuffer> {
   if (typeof file === "string") {
-    const res = await fetchWithTimeout(file, {}, 20_000);
+    // User-supplied URL → SSRF-guarded fetch (https-only, no private targets).
+    const res = await safeFetch(file, {}, 20_000);
     if (!res.ok) {
       throw new Error(`LALAL could not fetch audio: ${res.status} ${res.statusText}`);
     }
