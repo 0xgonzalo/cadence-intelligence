@@ -119,12 +119,27 @@ describe("musixmatch adapter", () => {
       expect(analysis.language).toBe("en");
     });
 
+    it("backfills the ISRC from track.get, normalized to upper case", async () => {
+      mockFetch.mockResolvedValue(
+        mxmResponse({ track: { track_isrc: "usnew1234567" } }),
+      );
+
+      const analysis = await getAnalysis("123");
+
+      expect(analysis.isrc).toBe("USNEW1234567");
+    });
+
     it("tolerates a sparse response", async () => {
       mockFetch.mockResolvedValue(mxmResponse({ track: {} }));
 
       const analysis = await getAnalysis("123");
 
-      expect(analysis).toEqual({ themes: [], mood: null, language: null });
+      expect(analysis).toEqual({
+        themes: [],
+        mood: null,
+        language: null,
+        isrc: null,
+      });
     });
   });
 

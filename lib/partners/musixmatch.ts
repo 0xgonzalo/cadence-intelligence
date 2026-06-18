@@ -229,6 +229,8 @@ const TrackBodySchema = z
         mood: z.string().optional(),
         language: z.string().optional(),
         lyrics_language: z.string().optional(),
+        // track.get returns the ISRC even when track.search omitted it.
+        track_isrc: z.string().optional(),
       })
       .passthrough(),
   })
@@ -238,6 +240,8 @@ export interface TrackAnalysis {
   themes: string[];
   mood: string | null;
   language: string | null;
+  /** Recovered from track.get — lets Songstats/Cyanite key tracks onboarded without one. */
+  isrc: string | null;
 }
 
 /**
@@ -257,6 +261,7 @@ export async function getAnalysis(mxmTrackId: string): Promise<TrackAnalysis> {
     themes: track.themes ?? genreThemes,
     mood: track.mood ?? null,
     language: track.language ?? track.lyrics_language ?? null,
+    isrc: track.track_isrc ? track.track_isrc.toUpperCase() : null,
   };
 }
 

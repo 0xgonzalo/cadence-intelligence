@@ -6,6 +6,7 @@ import {
   getAnalysis,
   getHookSnippet,
   getRichsync,
+  type TrackAnalysis,
 } from "@/lib/partners/musixmatch";
 import { analyzeTrack } from "@/lib/partners/cyanite";
 import { pickClipWindow } from "@/lib/intelligence/clip";
@@ -181,14 +182,18 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
   });
 
   let mxmTrackId = track.mxm_track_id;
-  let analysis = {
-    themes: [] as string[],
-    mood: null as string | null,
-    language: null as string | null,
+  // Tracks onboarded by name may have no ISRC yet. We recover it from track.get
+  // below so the ISRC-keyed partners (Cyanite, Songstats) can run this pass.
+  let isrc = track.isrc;
+  let analysis: TrackAnalysis = {
+    themes: [],
+    mood: null,
+    language: null,
+    isrc: null,
   };
   try {
-    if (!mxmTrackId && track.isrc) {
-      mxmTrackId = await matchTrack({ isrc: track.isrc });
+    if (!mxmTrackId && isrc) {
+      mxmTrackId = await matchTrack({ isrc });
       if (mxmTrackId) {
         await supabase
           .from("tracks")
@@ -197,6 +202,15 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
       }
     }
     if (mxmTrackId) analysis = await getAnalysis(mxmTrackId);
+    if (!isrc && analysis.isrc) {
+      isrc = analysis.isrc;
+      await supabase.from("tracks").update({ isrc }).eq("id", track.id);
+      await logAgent(supabase, {
+        artistId,
+        phase: "ANALYZE",
+        message: `Backfilled ISRC ${isrc} for "${title}" — enables momentum signals`,
+      });
+    }
   } catch (e) {
     await logAgent(supabase, {
       artistId,
@@ -208,9 +222,9 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
 
   let bpm: number | null = null;
   let energyCurve: number[] = [];
-  if (track.isrc) {
+  if (isrc) {
     try {
-      const cyanite = await analyzeTrack(track.isrc);
+      const cyanite = await analyzeTrack(isrc);
       bpm = cyanite.bpm;
       energyCurve = cyanite.energyCurve;
     } catch {
@@ -275,7 +289,7 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
     .maybeSingle();
 
   const briefInput: BriefInput = {
-    track: { title: track.title, isrc: track.isrc },
+    track: { title: track.title, isrc },
     intelligence: {
       themes,
       mood,
@@ -410,9 +424,9 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
 
   try {
     let artistMarkets: string[] = [];
-    if (track.isrc) {
+    if (isrc) {
       try {
-        artistMarkets = (await getTrackAudienceMarkets(track.isrc))
+        artistMarkets = (await getTrackAudienceMarkets(isrc))
           .slice(0, 5)
           .map((m) => m.market);
       } catch {
@@ -423,9 +437,9 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
 
     const baseFit = themes.length > 0 ? 0.65 : 0.45;
     let candidates: CreatorCandidate[] = [];
-    if (track.isrc) {
+    if (isrc) {
       try {
-        candidates = (await getTikTokCreators(track.isrc)).map((c) => ({
+        candidates = (await getTikTokCreators(isrc)).map((c) => ({
           handle: c.handle,
           markets: c.market ? [c.market] : [],
           reach: c.reach ?? 0,
