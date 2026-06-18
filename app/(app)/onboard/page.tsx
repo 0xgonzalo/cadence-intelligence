@@ -11,8 +11,9 @@ export default function OnboardPage() {
           Add an artist
         </h1>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          Register an artist and their catalog by ISRC. Once added, run a signal
-          poll and momentum opportunities surface on the Radar.
+          Search for the artist, pick their main songs, and we resolve the
+          catalog for you. Once added, run a signal poll and momentum
+          opportunities surface on the Radar.
         </p>
       </div>
 

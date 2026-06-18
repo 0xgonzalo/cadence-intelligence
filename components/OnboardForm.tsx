@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { parseIsrcs } from "@/lib/onboarding";
+import type { ArtistSearchResult, ArtistTrack } from "@/lib/partners/musixmatch";
 
 const labelCls =
   "font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground";
@@ -14,15 +14,78 @@ const inputCls =
 
 export function OnboardForm() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [spotifyUrl, setSpotifyUrl] = useState("");
-  const [isrcText, setIsrcText] = useState("");
+
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [artists, setArtists] = useState<ArtistSearchResult[]>([]);
+
+  const [artist, setArtist] = useState<ArtistSearchResult | null>(null);
+  const [loadingTracks, setLoadingTracks] = useState(false);
+  const [tracks, setTracks] = useState<ArtistTrack[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isrcs = parseIsrcs(isrcText);
+  async function runSearch() {
+    const q = query.trim();
+    if (!q) return;
+    setSearching(true);
+    setSearched(false);
+    setError(null);
+    try {
+      const res = await fetch(`/api/catalog?q=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Search failed");
+      setArtists(json.data as ArtistSearchResult[]);
+      setSearched(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function pickArtist(a: ArtistSearchResult) {
+    setArtist(a);
+    setLoadingTracks(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/catalog?artistId=${encodeURIComponent(a.artistId)}&limit=3`,
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Could not load songs");
+      const list = json.data as ArtistTrack[];
+      setTracks(list);
+      setSelected(new Set(list.map((t) => t.mxmTrackId)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load songs");
+    } finally {
+      setLoadingTracks(false);
+    }
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function changeArtist() {
+    setArtist(null);
+    setTracks([]);
+    setSelected(new Set());
+    setError(null);
+  }
 
   async function submit() {
+    if (!artist) return;
+    const chosen = tracks.filter((t) => selected.has(t.mxmTrackId));
     setPending(true);
     setError(null);
     try {
@@ -30,9 +93,12 @@ export function OnboardForm() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          name,
-          spotifyUrl: spotifyUrl || undefined,
-          isrcs,
+          name: artist.name,
+          tracks: chosen.map((t) => ({
+            title: t.title,
+            isrc: t.isrc,
+            mxmTrackId: t.mxmTrackId,
+          })),
         }),
       });
       const json = await res.json();
@@ -48,58 +114,144 @@ export function OnboardForm() {
 
   return (
     <Card className="max-w-xl space-y-6 p-6">
-      <div className="space-y-2">
-        <label className={labelCls} htmlFor="name">
-          Artist name
-        </label>
-        <input
-          id="name"
-          className={inputCls}
-          placeholder="e.g. Phoebe Bridgers"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </div>
+      {!artist ? (
+        <>
+          <div className="space-y-2">
+            <label className={labelCls} htmlFor="artist-search">
+              Find your artist
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="artist-search"
+                className={inputCls}
+                placeholder="e.g. Phoebe Bridgers"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    runSearch();
+                  }
+                }}
+              />
+              <Button
+                onClick={runSearch}
+                disabled={searching || !query.trim()}
+                className="shrink-0"
+              >
+                {searching ? "Searching…" : "Search"}
+              </Button>
+            </div>
+            <p className={labelCls}>
+              We resolve your songs and their ISRCs for you — no codes to paste.
+            </p>
+          </div>
 
-      <div className="space-y-2">
-        <label className={labelCls} htmlFor="spotifyUrl">
-          Spotify URL (optional)
-        </label>
-        <input
-          id="spotifyUrl"
-          type="url"
-          className={inputCls}
-          placeholder="https://open.spotify.com/artist/…"
-          value={spotifyUrl}
-          onChange={(e) => setSpotifyUrl(e.target.value)}
-        />
-      </div>
+          {searched && artists.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No artists found. Try the exact name as it appears on streaming.
+            </p>
+          ) : null}
 
-      <div className="space-y-2">
-        <label className={labelCls} htmlFor="isrcs">
-          Track ISRCs — one per line or comma-separated
-        </label>
-        <textarea
-          id="isrcs"
-          rows={5}
-          className={cn(inputCls, "resize-none font-mono text-xs")}
-          placeholder={"USRC17600001\nGBUM71029604"}
-          value={isrcText}
-          onChange={(e) => setIsrcText(e.target.value)}
-        />
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          {isrcs.length} track{isrcs.length === 1 ? "" : "s"} detected
-        </p>
-      </div>
+          {artists.length > 0 ? (
+            <ul className="space-y-2">
+              {artists.map((a) => (
+                <li key={a.artistId}>
+                  <button
+                    type="button"
+                    onClick={() => pickArtist(a)}
+                    className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-foreground/40"
+                  >
+                    <span className="text-sm font-medium">{a.name}</span>
+                    {a.country ? (
+                      <span className={labelCls}>{a.country}</span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className={labelCls}>Selected artist</p>
+              <p className="text-lg font-semibold tracking-tight">
+                {artist.name}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              onClick={changeArtist}
+              disabled={pending}
+              className="shrink-0"
+            >
+              Change
+            </Button>
+          </div>
 
-      <div className="flex items-center gap-3">
-        <Button onClick={submit} disabled={pending || !name.trim()}>
-          {pending ? "Onboarding…" : "Onboard artist"}
-        </Button>
-        {error ? (
-          <span className="font-mono text-sm text-destructive">{error}</span>
-        ) : null}
-      </div>
+          <div className="space-y-2">
+            <p className={labelCls}>Your main songs</p>
+            {loadingTracks ? (
+              <p className="text-sm text-muted-foreground">Loading songs…</p>
+            ) : tracks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No songs found for this artist on Musixmatch.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {tracks.map((t) => {
+                  const on = selected.has(t.mxmTrackId);
+                  return (
+                    <li key={t.mxmTrackId}>
+                      <label
+                        className={cn(
+                          "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+                          on
+                            ? "border-foreground/40 bg-muted/40"
+                            : "border-border hover:border-foreground/20",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => toggle(t.mxmTrackId)}
+                          className="size-4 accent-foreground"
+                        />
+                        <span className="flex-1 text-sm font-medium">
+                          {t.title}
+                        </span>
+                        <span className={labelCls}>
+                          {t.isrc ?? "no ISRC"}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={submit}
+              disabled={pending || selected.size === 0}
+            >
+              {pending
+                ? "Onboarding…"
+                : `Onboard ${selected.size} song${selected.size === 1 ? "" : "s"}`}
+            </Button>
+            {error ? (
+              <span className="font-mono text-sm text-destructive">{error}</span>
+            ) : null}
+          </div>
+        </>
+      )}
+
+      {!artist && error ? (
+        <span className="font-mono text-sm text-destructive">{error}</span>
+      ) : null}
     </Card>
   );
 }

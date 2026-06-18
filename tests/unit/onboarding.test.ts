@@ -1,35 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { parseIsrcs } from "@/lib/onboarding";
+import { normalizeOnboardTracks } from "@/lib/onboarding";
 
-describe("parseIsrcs", () => {
-  it("splits on newlines and commas", () => {
-    expect(parseIsrcs("USRC17600001\nGBUM71029604, FRUM71200123")).toEqual([
-      "USRC17600001",
-      "GBUM71029604",
-      "FRUM71200123",
+describe("normalizeOnboardTracks", () => {
+  it("keeps title, uppercased isrc, and mxm id", () => {
+    expect(
+      normalizeOnboardTracks([
+        { title: "Motion Sickness", isrc: "usajaja", mxmTrackId: "998877" },
+      ]),
+    ).toEqual([
+      { title: "Motion Sickness", isrc: "USAJAJA", mxmTrackId: "998877" },
     ]);
   });
 
-  it("trims whitespace and uppercases", () => {
-    expect(parseIsrcs("  usrc17600001  ")).toEqual(["USRC17600001"]);
+  it("trims and nulls a blank or missing isrc / mxm id", () => {
+    expect(
+      normalizeOnboardTracks([
+        { title: "  Kyoto  ", isrc: "  ", mxmTrackId: undefined },
+      ]),
+    ).toEqual([{ title: "Kyoto", isrc: null, mxmTrackId: null }]);
   });
 
-  it("drops blank entries", () => {
-    expect(parseIsrcs("USRC17600001\n\n,  ,\nGBUM71029604")).toEqual([
-      "USRC17600001",
-      "GBUM71029604",
-    ]);
+  it("drops entries with an empty title", () => {
+    expect(
+      normalizeOnboardTracks([
+        { title: "   ", isrc: "USONE" },
+        { title: "Real", isrc: "USTWO" },
+      ]),
+    ).toEqual([{ title: "Real", isrc: "USTWO", mxmTrackId: null }]);
   });
 
-  it("dedupes while preserving first-seen order", () => {
-    expect(parseIsrcs("USRC17600001\nusrc17600001\nGBUM71029604")).toEqual([
-      "USRC17600001",
-      "GBUM71029604",
+  it("dedupes by isrc, then mxm id, then title — first seen wins", () => {
+    expect(
+      normalizeOnboardTracks([
+        { title: "A", isrc: "USX" },
+        { title: "A dup by isrc", isrc: "usx" },
+        { title: "B", mxmTrackId: "55" },
+        { title: "B dup by mxm", mxmTrackId: "55" },
+        { title: "C" },
+        { title: "c" },
+      ]),
+    ).toEqual([
+      { title: "A", isrc: "USX", mxmTrackId: null },
+      { title: "B", isrc: null, mxmTrackId: "55" },
+      { title: "C", isrc: null, mxmTrackId: null },
     ]);
   });
 
   it("returns an empty array for empty input", () => {
-    expect(parseIsrcs("")).toEqual([]);
-    expect(parseIsrcs("   \n  ")).toEqual([]);
+    expect(normalizeOnboardTracks([])).toEqual([]);
   });
 });

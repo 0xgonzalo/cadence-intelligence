@@ -1,19 +1,29 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeOnboardTracks } from "@/lib/onboarding";
 
 export const runtime = "nodejs";
 
 const BodySchema = z.object({
   name: z.string(),
   spotifyUrl: z.string().optional(),
-  isrcs: z.array(z.string()).optional().default([]),
+  tracks: z
+    .array(
+      z.object({
+        title: z.string(),
+        isrc: z.string().nullish(),
+        mxmTrackId: z.string().nullish(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 /**
- * Onboard an artist for the signed-in user and index its catalog by ISRC.
- * Tracks start titled by their ISRC; a later intelligence pass enriches the
- * real title. RLS scopes the rows to `auth.uid()` via the owner policies.
+ * Onboard an artist for the signed-in user and index the songs they picked from
+ * the catalog (real titles + Musixmatch ids, ISRC resolved when available).
+ * RLS scopes the rows to `auth.uid()` via the owner policies.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -44,11 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
   const spotifyUrl = parsed.data.spotifyUrl?.trim() || null;
-  const isrcs = [
-    ...new Set(
-      parsed.data.isrcs.map((i) => i.trim().toUpperCase()).filter(Boolean),
-    ),
-  ];
+  const tracks = normalizeOnboardTracks(parsed.data.tracks);
 
   const { data: artist, error: artistError } = await supabase
     .from("artists")
@@ -62,10 +68,15 @@ export async function POST(request: Request) {
     );
   }
 
-  if (isrcs.length > 0) {
-    const { error: tracksError } = await supabase
-      .from("tracks")
-      .insert(isrcs.map((isrc) => ({ artist_id: artist.id, isrc, title: isrc })));
+  if (tracks.length > 0) {
+    const { error: tracksError } = await supabase.from("tracks").insert(
+      tracks.map((t) => ({
+        artist_id: artist.id,
+        isrc: t.isrc,
+        title: t.title,
+        mxm_track_id: t.mxmTrackId,
+      })),
+    );
     if (tracksError) {
       return NextResponse.json({ error: tracksError.message }, { status: 500 });
     }

@@ -1,17 +1,36 @@
 /**
- * Parse the free-text ISRC field from the onboarding form into a clean list:
- * accepts newline- and/or comma-separated entries, normalizes to uppercase,
- * drops blanks, and dedupes (first-seen order). The `/api/artists` route
- * re-normalizes server-side, so this is purely for a tidy request + preview.
+ * Normalize the tracks an artist picked during onboarding (from the catalog
+ * picker) into clean rows for the `tracks` table: trim titles, uppercase ISRCs,
+ * null out blanks, drop title-less entries, and dedupe (by ISRC, then mxm id,
+ * then title — first seen wins). The `/api/artists` route re-runs this
+ * server-side, so the client use is just a tidy request + preview.
  */
-export function parseIsrcs(raw: string): string[] {
+export interface OnboardTrackInput {
+  title: string;
+  isrc?: string | null;
+  mxmTrackId?: string | null;
+}
+
+export interface OnboardTrack {
+  title: string;
+  isrc: string | null;
+  mxmTrackId: string | null;
+}
+
+export function normalizeOnboardTracks(
+  tracks: OnboardTrackInput[],
+): OnboardTrack[] {
   const seen = new Set<string>();
-  const out: string[] = [];
-  for (const token of raw.split(/[\n,]/)) {
-    const isrc = token.trim().toUpperCase();
-    if (!isrc || seen.has(isrc)) continue;
-    seen.add(isrc);
-    out.push(isrc);
+  const out: OnboardTrack[] = [];
+  for (const t of tracks) {
+    const title = t.title?.trim() ?? "";
+    if (!title) continue;
+    const isrc = t.isrc?.trim().toUpperCase() || null;
+    const mxmTrackId = t.mxmTrackId?.trim() || null;
+    const key = isrc ?? mxmTrackId ?? `title:${title.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title, isrc, mxmTrackId });
   }
   return out;
 }
