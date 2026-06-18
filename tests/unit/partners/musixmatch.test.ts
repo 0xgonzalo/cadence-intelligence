@@ -6,6 +6,8 @@ import {
   getAnalysis,
   getHookSnippet,
   getRichsync,
+  searchArtists,
+  getArtistTracks,
 } from "@/lib/partners/musixmatch";
 
 vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
@@ -123,6 +125,98 @@ describe("musixmatch adapter", () => {
       const analysis = await getAnalysis("123");
 
       expect(analysis).toEqual({ themes: [], mood: null, language: null });
+    });
+  });
+
+  describe("searchArtists", () => {
+    it("resolves artists by name", async () => {
+      mockFetch.mockResolvedValue(
+        mxmResponse({
+          artist_list: [
+            {
+              artist: {
+                artist_id: 118827,
+                artist_name: "Phoebe Bridgers",
+                artist_country: "US",
+              },
+            },
+            { artist: { artist_id: 200, artist_name: "Phoebe Other" } },
+          ],
+        }),
+      );
+
+      const artists = await searchArtists("phoebe bridgers");
+
+      expect(artists).toEqual([
+        { artistId: "118827", name: "Phoebe Bridgers", country: "US" },
+        { artistId: "200", name: "Phoebe Other", country: null },
+      ]);
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain("/artist.search");
+      expect(calledUrl).toContain("q_artist=phoebe+bridgers");
+    });
+
+    it("returns [] when Musixmatch has no match", async () => {
+      mockFetch.mockResolvedValue(mxmResponse("", 404));
+
+      expect(await searchArtists("zzzznotanartist")).toEqual([]);
+    });
+  });
+
+  describe("getArtistTracks", () => {
+    it("returns an artist's top tracks with title + isrc", async () => {
+      mockFetch.mockResolvedValue(
+        mxmResponse({
+          track_list: [
+            {
+              track: {
+                track_id: 998877,
+                track_name: "Motion Sickness",
+                track_isrc: "USajaja",
+              },
+            },
+            {
+              track: {
+                track_id: 998878,
+                track_name: "Kyoto",
+                track_isrc: "usbjbjb",
+              },
+            },
+          ],
+        }),
+      );
+
+      const tracks = await getArtistTracks("118827", 3);
+
+      expect(tracks).toEqual([
+        { mxmTrackId: "998877", title: "Motion Sickness", isrc: "USAJAJA" },
+        { mxmTrackId: "998878", title: "Kyoto", isrc: "USBJBJB" },
+      ]);
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain("/track.search");
+      expect(calledUrl).toContain("f_artist_id=118827");
+      expect(calledUrl).toContain("s_track_rating=desc");
+      expect(calledUrl).toContain("page_size=3");
+    });
+
+    it("defaults isrc to null when Musixmatch omits it", async () => {
+      mockFetch.mockResolvedValue(
+        mxmResponse({
+          track_list: [
+            { track: { track_id: 5, track_name: "No ISRC Here" } },
+          ],
+        }),
+      );
+
+      expect(await getArtistTracks("118827")).toEqual([
+        { mxmTrackId: "5", title: "No ISRC Here", isrc: null },
+      ]);
+    });
+
+    it("returns [] when the artist has no tracks", async () => {
+      mockFetch.mockResolvedValue(mxmResponse("", 404));
+
+      expect(await getArtistTracks("118827")).toEqual([]);
     });
   });
 

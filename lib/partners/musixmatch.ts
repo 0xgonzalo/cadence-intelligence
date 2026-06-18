@@ -104,6 +104,105 @@ export async function matchTrack(q: TrackQuery): Promise<string | null> {
   return String(parsed.data.track.track_id);
 }
 
+// --- artist.search → onboarding artist picker ------------------------------
+
+const ArtistSearchBodySchema = z
+  .object({
+    artist_list: z
+      .array(
+        z
+          .object({
+            artist: z
+              .object({
+                artist_id: z.union([z.number(), z.string()]),
+                artist_name: z.string(),
+                artist_country: z.string().optional(),
+              })
+              .passthrough(),
+          })
+          .passthrough(),
+      )
+      .default([]),
+  })
+  .passthrough();
+
+export interface ArtistSearchResult {
+  artistId: string;
+  name: string;
+  country: string | null;
+}
+
+/**
+ * Search Musixmatch for artists by name — the onboarding artist picker. Returns
+ * [] when nothing matches (Musixmatch answers an unmatched search with 404).
+ */
+export async function searchArtists(
+  query: string,
+): Promise<ArtistSearchResult[]> {
+  const body = await mxmGet("/artist.search", {
+    q_artist: query,
+    page_size: "8",
+  });
+  const parsed = ArtistSearchBodySchema.safeParse(body);
+  if (!parsed.success) return [];
+  return parsed.data.artist_list.map(({ artist }) => ({
+    artistId: String(artist.artist_id),
+    name: artist.artist_name,
+    country: artist.artist_country ?? null,
+  }));
+}
+
+// --- track.search → artist catalog -----------------------------------------
+
+const ArtistTracksBodySchema = z
+  .object({
+    track_list: z
+      .array(
+        z
+          .object({
+            track: z
+              .object({
+                track_id: z.union([z.number(), z.string()]),
+                track_name: z.string(),
+                track_isrc: z.string().optional(),
+              })
+              .passthrough(),
+          })
+          .passthrough(),
+      )
+      .default([]),
+  })
+  .passthrough();
+
+export interface ArtistTrack {
+  mxmTrackId: string;
+  title: string;
+  isrc: string | null;
+}
+
+/**
+ * Top tracks for a Musixmatch artist id, highest-rated first — the candidate
+ * songs an artist picks during onboarding. `isrc` is null when Musixmatch
+ * doesn't expose one for a track. Returns [] when the artist has no tracks.
+ */
+export async function getArtistTracks(
+  artistId: string,
+  limit = 3,
+): Promise<ArtistTrack[]> {
+  const body = await mxmGet("/track.search", {
+    f_artist_id: artistId,
+    s_track_rating: "desc",
+    page_size: String(limit),
+  });
+  const parsed = ArtistTracksBodySchema.safeParse(body);
+  if (!parsed.success) return [];
+  return parsed.data.track_list.map(({ track }) => ({
+    mxmTrackId: String(track.track_id),
+    title: track.track_name,
+    isrc: track.track_isrc ? track.track_isrc.toUpperCase() : null,
+  }));
+}
+
 // --- track.get → derived analysis -----------------------------------------
 
 const TrackBodySchema = z
