@@ -4,6 +4,7 @@ import { uploadAudio, requestSplit, pollSplit } from "@/lib/partners/lalal";
 import { tts, DEFAULT_VOICE_ID } from "@/lib/partners/elevenlabs";
 import { getRichsync } from "@/lib/partners/musixmatch";
 import { fetchWithTimeout, assertSafeUrl } from "@/lib/http";
+import { normalizeAudioUrl, isInOpportunityScope } from "@/lib/audio-url";
 import type { Json } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -113,6 +114,7 @@ export async function POST(request: Request) {
 
   let opportunityId: string | undefined;
   let audioUrl: string | undefined;
+  let audioPath: string | undefined;
   let requested: AssetType[] = DEFAULT_ASSETS;
   try {
     const raw = await request.json();
@@ -120,10 +122,12 @@ export async function POST(request: Request) {
       const body = raw as {
         opportunityId?: string;
         audioUrl?: string;
+        audioPath?: string;
         assets?: unknown;
       };
       opportunityId = body.opportunityId;
       audioUrl = body.audioUrl;
+      audioPath = body.audioPath;
       if (Array.isArray(body.assets)) {
         const picked = body.assets.filter(
           (a): a is AssetType =>
@@ -144,6 +148,7 @@ export async function POST(request: Request) {
   // Reject SSRF-prone audio URLs before any server-side fetch (https-only,
   // public hosts). safeFetch re-checks each redirect hop downstream.
   if (audioUrl) {
+    audioUrl = normalizeAudioUrl(audioUrl);
     try {
       await assertSafeUrl(audioUrl);
     } catch (e) {
@@ -181,13 +186,38 @@ export async function POST(request: Request) {
   const wantInstrumental = requested.includes("instrumental");
   const wantAcapella = requested.includes("acapella");
   if (wantInstrumental || wantAcapella) {
-    if (!audioUrl) {
-      const note: Json = { skipped: "no audioUrl provided" };
+    // Source the audio bytes from the uploaded object (preferred) or the URL.
+    let source: Uint8Array | string | null = null;
+    let sourceErr: string | null = null;
+    if (audioPath) {
+      if (!isInOpportunityScope(oppId, audioPath)) {
+        sourceErr = "audioPath outside opportunity scope";
+      } else {
+        try {
+          const { data, error } = await service.storage
+            .from(BUCKET)
+            .download(audioPath);
+          if (error || !data) {
+            throw new Error(error?.message ?? "source download failed");
+          }
+          source = new Uint8Array(await data.arrayBuffer());
+        } catch (e) {
+          sourceErr = errMsg(e);
+        }
+      }
+    } else if (audioUrl) {
+      source = audioUrl;
+    }
+
+    if (!source) {
+      const note: Json = sourceErr
+        ? { error: sourceErr }
+        : { skipped: "no audio source provided" };
       if (wantInstrumental) results.instrumental = note;
       if (wantAcapella) results.acapella = note;
     } else {
       try {
-        const fileId = await uploadAudio(audioUrl, `${track.id}.mp3`);
+        const fileId = await uploadAudio(source, `${track.id}.mp3`);
         await requestSplit(fileId, "vocals");
         const split = await pollSplit(fileId);
         if (wantInstrumental && split.backUrl) {
