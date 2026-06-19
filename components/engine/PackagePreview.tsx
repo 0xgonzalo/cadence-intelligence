@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import { extFromFilename } from "@/lib/audio-url";
 
 interface StoredAsset {
   url?: string;
@@ -23,6 +25,8 @@ interface LyricClip {
 }
 
 export type PackageAssets = Record<string, unknown> | null;
+
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 const AUDIO_LABEL: Record<string, string> = {
   instrumental: "Instrumental",
@@ -82,19 +86,60 @@ export function PackagePreview({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+
+  function pickFile(f: File | null) {
+    setError(null);
+    if (!f) {
+      setFile(null);
+      return;
+    }
+    if (!extFromFilename(f.name)) {
+      setError("Unsupported file type — use mp3, wav, m4a, flac, aac, or ogg.");
+      return;
+    }
+    if (f.size > MAX_UPLOAD_BYTES) {
+      setError("File too large — max 100 MB.");
+      return;
+    }
+    setFile(f);
+  }
 
   async function build() {
     setPending(true);
     setError(null);
     try {
+      let audioPath: string | undefined;
+      if (file) {
+        setUploading(true);
+        const up = await fetch("/api/assets/upload", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ opportunityId, filename: file.name }),
+        });
+        const upJson = await up.json();
+        if (!up.ok) throw new Error(upJson.error ?? "Upload init failed");
+        const supabase = createClient();
+        const { error: putErr } = await supabase.storage
+          .from("packages")
+          .uploadToSignedUrl(upJson.path, upJson.token, file, {
+            contentType: file.type || undefined,
+          });
+        if (putErr) throw new Error(putErr.message);
+        audioPath = upJson.path as string;
+        setUploading(false);
+      }
+
       const res = await fetch("/api/assets", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           opportunityId,
-          audioUrl: audioUrl.trim() || undefined,
+          audioPath,
+          audioUrl: !audioPath && audioUrl.trim() ? audioUrl.trim() : undefined,
         }),
       });
       const json = await res.json();
@@ -103,6 +148,7 @@ export function PackagePreview({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Asset build failed");
     } finally {
+      setUploading(false);
       setPending(false);
     }
   }
@@ -128,12 +174,14 @@ export function PackagePreview({
           </p>
           {status ? <Badge variant="solid">{status}</Badge> : null}
         </div>
-        <Button onClick={build} disabled={pending || !hasBriefs}>
-          {pending
-            ? "Building…"
-            : hasPackage
-              ? "Rebuild package"
-              : "Build package"}
+        <Button onClick={build} disabled={pending || uploading || !hasBriefs}>
+          {uploading
+            ? "Uploading…"
+            : pending
+              ? "Building…"
+              : hasPackage
+                ? "Rebuild package"
+                : "Build package"}
         </Button>
       </div>
 
@@ -142,21 +190,59 @@ export function PackagePreview({
           Generate a brief first — the voiceover is read from the brief copy.
         </p>
       ) : (
-        <div className="mt-4 space-y-1">
-          <label
-            htmlFor="audioUrl"
-            className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-          >
-            Audio URL (optional · enables stem separation)
-          </label>
-          <input
-            id="audioUrl"
-            type="url"
-            value={audioUrl}
-            onChange={(e) => setAudioUrl(e.target.value)}
-            placeholder="https://…/track.mp3"
-            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+        <div className="mt-4 space-y-3">
+          <div className="space-y-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Source audio (optional · enables stem separation)
+            </p>
+            <label
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                pickFile(e.dataTransfer.files?.[0] ?? null);
+              }}
+              className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground hover:border-foreground/40"
+            >
+              {file ? (
+                <span className="font-mono text-[11px]">
+                  {uploading ? "Uploading… " : `${file.name} `}·{" "}
+                  {(file.size / 1024 / 1024).toFixed(1)} MB
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      pickFile(null);
+                    }}
+                    className="ml-2 underline"
+                  >
+                    clear
+                  </button>
+                </span>
+              ) : (
+                <span>Drop an audio file here, or click to choose</span>
+              )}
+              <input
+                type="file"
+                accept="audio/*"
+                className="hidden"
+                onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+
+          <details>
+            <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              or paste a link (Google Drive · Dropbox · direct file)
+            </summary>
+            <input
+              id="audioUrl"
+              type="url"
+              value={audioUrl}
+              onChange={(e) => setAudioUrl(e.target.value)}
+              placeholder="https://…/track.mp3"
+              className="mt-2 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </details>
         </div>
       )}
 
