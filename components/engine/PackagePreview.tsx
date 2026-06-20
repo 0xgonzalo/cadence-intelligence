@@ -73,6 +73,35 @@ function secs(ms?: number): string {
   return ms == null ? "—" : `${(ms / 1000).toFixed(1)}s`;
 }
 
+/**
+ * Parse a JSON API response, tolerating non-JSON error bodies. A timed-out
+ * function returns a plain-text 504 ("An error occurred…") that JSON.parse
+ * chokes on — surface a real message instead of a cryptic parse error.
+ */
+async function readJson(
+  res: Response,
+  fallback: string,
+): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  let json: Record<string, unknown> | null = null;
+  try {
+    json = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+  } catch {
+    json = null;
+  }
+  if (!res.ok) {
+    if (typeof json?.error === "string") throw new Error(json.error);
+    if (res.status === 504 || res.status === 408) {
+      throw new Error(
+        "Build timed out — stem separation took too long. Try again, or use a shorter track.",
+      );
+    }
+    throw new Error(`${fallback} (${res.status})`);
+  }
+  if (!json) throw new Error(fallback);
+  return json;
+}
+
 export function PackagePreview({
   opportunityId,
   status,
@@ -120,14 +149,16 @@ export function PackagePreview({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ opportunityId, filename: file.name }),
         });
-        const upJson = await up.json();
-        if (!up.ok) throw new Error(upJson.error ?? "Upload init failed");
+        const upJson = await readJson(up, "Upload init failed");
         const supabase = createClient();
         const { error: putErr } = await supabase.storage
           .from("packages")
-          .uploadToSignedUrl(upJson.path, upJson.token, file, {
-            contentType: file.type || undefined,
-          });
+          .uploadToSignedUrl(
+            upJson.path as string,
+            upJson.token as string,
+            file,
+            { contentType: file.type || undefined },
+          );
         if (putErr) throw new Error(putErr.message);
         audioPath = upJson.path as string;
         setUploading(false);
@@ -142,8 +173,7 @@ export function PackagePreview({
           audioUrl: !audioPath && audioUrl.trim() ? audioUrl.trim() : undefined,
         }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Asset build failed");
+      await readJson(res, "Asset build failed");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Asset build failed");

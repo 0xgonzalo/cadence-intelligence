@@ -8,7 +8,10 @@ import { normalizeAudioUrl, isInOpportunityScope } from "@/lib/audio-url";
 import type { Json } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// LALAL stem separation polls up to ~120s (pollSplit) on top of upload,
+// downloads and TTS — 60s would let Vercel kill the function mid-build and
+// return a non-JSON 504. 300s gives the orchestration headroom.
+export const maxDuration = 300;
 
 const BUCKET = "packages";
 /** Signed-URL lifetime — kept short to match the ephemeral-asset policy. */
