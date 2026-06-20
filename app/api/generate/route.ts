@@ -13,7 +13,7 @@ import { classifyGatewayError } from "@/lib/ai";
 import type { Json } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * GENERATE: turn one opportunity into persisted multiformat briefs.

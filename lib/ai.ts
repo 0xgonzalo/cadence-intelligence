@@ -13,10 +13,24 @@
  * Override without code changes via `CADENCE_AI_MODEL` — e.g. point it at
  * `anthropic/claude-sonnet-4.5` once the gateway team has paid credits.
  */
-import { APICallError, generateObject } from "ai";
+import { APICallError, generateObject, NoObjectGeneratedError } from "ai";
 import type { z } from "zod";
 
 const DEFAULT_MODEL = "anthropic/claude-haiku-4.5";
+
+/**
+ * Generous output cap. A full multiformat brief is a large nested object; the
+ * provider's default cap can truncate it, which surfaces as a schema-mismatch
+ * `NoObjectGeneratedError` rather than a clean length signal.
+ */
+const MAX_OUTPUT_TOKENS = 8000;
+
+/**
+ * Haiku occasionally returns output that fails strict schema validation.
+ * `generateObject` retries transport errors but NOT schema mismatches, so we
+ * retry those here a bounded number of times before giving up.
+ */
+const SCHEMA_RETRIES = 2;
 
 /** Resolved gateway model id (override per-call, or via `CADENCE_AI_MODEL`). */
 export function model(override?: string): string {
@@ -41,13 +55,26 @@ export async function generateStructured<T>({
   system,
   modelId,
 }: GenerateStructuredArgs<T>): Promise<T> {
-  const { object } = await generateObject({
-    model: model(modelId),
-    schema,
-    system,
-    prompt,
-  });
-  return object;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= SCHEMA_RETRIES; attempt++) {
+    try {
+      const { object } = await generateObject({
+        model: model(modelId),
+        schema,
+        system,
+        prompt,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+      });
+      return object;
+    } catch (err) {
+      lastErr = err;
+      // Retry only schema-mismatch / no-object failures; let real API errors
+      // (rate limit, auth, etc.) surface immediately.
+      if (NoObjectGeneratedError.isInstance(err)) continue;
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 export interface GatewayErrorInfo {
