@@ -18,8 +18,7 @@ is out of scope.
 
 ## How it works — the autonomous loop
 
-CADENCE doesn't wait to be asked. A persistent agent (orchestrated in **n8n** or Vercel
-Cron) runs this loop on a schedule:
+CADENCE doesn't wait to be asked. A persistent agent (orchestrated in **n8n**) runs this loop on a schedule:
 
 ```
 WATCH  →  DETECT  →  ANALYZE  →  GENERATE  →  PACKAGE  →  SURFACE
@@ -215,7 +214,7 @@ npm run dev          # http://localhost:3000
 | `GET`/`POST` | `/api/agent/config` | Read/update agent configuration |
 | `POST` | `/api/signal/run` | Manual "Refresh signals" tick |
 
-**Cron-gated** (`Authorization: Bearer ${CRON_SECRET}` — driven by n8n / Vercel Cron):
+**Cron-gated** (`Authorization: Bearer ${CRON_SECRET}` — driven by n8n):
 
 | Method | Route | Loop stage |
 |--------|-------|------------|
@@ -225,11 +224,11 @@ npm run dev          # http://localhost:3000
 | `POST` | `/api/assets/cleanup` | Expire stale generated assets |
 
 > `/api/agent/run` accepts **both** auth paths: a `Bearer ${CRON_SECRET}` request runs across
-> every catalog (cron/n8n), while a signed-in session scopes the run to that user.
+> every catalog (n8n), while a signed-in session scopes the run to that user.
 
 ---
 
-## Orchestration (n8n / Cron)
+## Orchestration (n8n)
 
 `n8n/cadence-agent.json` is an importable workflow. On a schedule (default every 6h) it calls
 the three cron endpoints in order — `signal/poll` → `agent/run` → `agent/weekly` — each with the
