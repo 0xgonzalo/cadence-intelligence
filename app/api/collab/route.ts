@@ -92,21 +92,21 @@ export async function POST(request: Request) {
     )
     .eq("id", opportunityId)
     .single();
-  if (oppErr || !opp || !opp.tracks) {
-    return NextResponse.json(
-      { error: "Opportunity or track not found" },
-      { status: 404 },
-    );
+  if (oppErr || !opp) {
+    return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
   }
 
+  // Event-driven (live-show) opportunities have no catalog track. Creator
+  // discovery is ISRC-driven (Songstats audience + TikTok UGC), so a track-less
+  // signal yields no candidates — return a clean empty radar, not a 404.
   const track = opp.tracks;
   const oppId = opp.id;
-  const title = track.title ?? track.isrc ?? "this track";
+  const title = track?.title ?? track?.isrc ?? "this track";
   const angle = opp.briefs?.find((b) => b.angle)?.angle ?? null;
 
   // --- real audience geography (Songstats) → the artist's priority markets ---
   let artistMarkets: string[] = [];
-  if (track.isrc) {
+  if (track?.isrc) {
     try {
       artistMarkets = (await getTrackAudienceMarkets(track.isrc))
         .slice(0, 5)
@@ -118,8 +118,8 @@ export async function POST(request: Request) {
   if (artistMarkets.length === 0 && opp.market) artistMarkets = [opp.market];
 
   // --- derived themes (Musixmatch) for values context + rationale -----------
-  let themes: string[] = track.track_intelligence?.themes ?? [];
-  if (themes.length === 0 && track.mxm_track_id) {
+  let themes: string[] = track?.track_intelligence?.themes ?? [];
+  if (themes.length === 0 && track?.mxm_track_id) {
     try {
       themes = (await getAnalysis(track.mxm_track_id)).themes ?? [];
     } catch {
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
   // --- candidate pool: real TikTok UGC creators only (no fabrication) --------
   const baseFit = themes.length > 0 ? 0.65 : 0.45;
   let candidates: CreatorCandidate[] = [];
-  if (track.isrc) {
+  if (track?.isrc) {
     try {
       candidates = (await getTikTokCreators(track.isrc)).map((c) => ({
         handle: c.handle,
