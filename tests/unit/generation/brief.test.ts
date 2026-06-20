@@ -54,6 +54,16 @@ describe("buildBriefPrompt", () => {
     expect(prompt).toMatch(/30(\.0)?s/);
   });
 
+  it("instructs the model on time rules, structure, and why-it-works", () => {
+    const prompt = buildBriefPrompt(baseInput).toLowerCase();
+    expect(prompt).toContain("time rules");
+    expect(prompt).toContain("why it works");
+    expect(prompt).toContain("beat");
+    expect(prompt).toContain("concept");
+    // platform timing rule from the format playbook
+    expect(prompt).toContain("first 3 seconds");
+  });
+
   it("rejects a hook of 15+ words via the compliance guard", () => {
     const longHook = Array(15).fill("x").join(" ");
     expect(() =>
@@ -69,19 +79,27 @@ describe("buildBriefPrompt", () => {
 });
 
 describe("generateBrief", () => {
+  const plan = (name: string) => ({
+    concept: `${name} concept`,
+    whyItWorks: `${name} works because BR is surging`,
+    beats: [
+      { time: "0–3s", label: "Hook", action: "open strong" },
+      { time: "3–15s", label: "Payoff", action: "deliver the moment" },
+    ],
+    captions: [`${name} caption a`, `${name} caption b`],
+  });
   const fakeCopy = {
     hook: "your city, after midnight",
     angle: "lean into the BR late-night crowd",
     formats: {
-      reel: "reel copy",
-      tiktok: "tiktok copy",
-      short: "short copy",
-      lyricVideo: "lyric video copy",
-      staticPost: "static post copy",
-      carousel: "carousel copy",
-      faceless: "faceless copy",
+      reel: plan("reel"),
+      tiktok: plan("tiktok"),
+      short: plan("short"),
+      lyricVideo: plan("lyric"),
+      staticPost: plan("static"),
+      carousel: plan("carousel"),
+      faceless: plan("faceless"),
     },
-    captions: ["caption a", "caption b"],
     script: "voiceover script",
   };
 

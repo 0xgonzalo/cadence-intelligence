@@ -12,11 +12,12 @@ import { analyzeTrack } from "@/lib/partners/cyanite";
 import { pickClipWindow } from "@/lib/intelligence/clip";
 import {
   generateBrief,
+  localizeBriefCopy,
+  briefRowCopy,
   FORMAT_KEYS,
   type BriefCopy,
   type BriefInput,
 } from "@/lib/generation/brief";
-import { translate } from "@/lib/generation/translate";
 import { tts, DEFAULT_VOICE_ID } from "@/lib/partners/elevenlabs";
 import {
   getTikTokCreators,
@@ -79,27 +80,6 @@ async function storeAudio(
     throw new Error(signErr?.message ?? "could not sign asset url");
   }
   return { path, url: data.signedUrl, bytes: bytes.byteLength, contentType };
-}
-
-async function localizeBrief(copy: BriefCopy, lang: string): Promise<BriefCopy> {
-  const [hook, angle, script, captions, formatPairs] = await Promise.all([
-    translate(copy.hook, lang),
-    translate(copy.angle, lang),
-    translate(copy.script, lang),
-    Promise.all(copy.captions.map((c) => translate(c, lang))),
-    Promise.all(
-      FORMAT_KEYS.map(
-        async (f) => [f, await translate(copy.formats[f], lang)] as const,
-      ),
-    ),
-  ]);
-  return {
-    hook,
-    angle,
-    script,
-    captions,
-    formats: Object.fromEntries(formatPairs) as BriefCopy["formats"],
-  };
 }
 
 const OutreachSchema = z.object({
@@ -317,7 +297,10 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
     { lang: srcLang, copy: brief },
   ];
   if (tgtLang) {
-    variants.push({ lang: tgtLang, copy: await localizeBrief(brief, tgtLang) });
+    variants.push({
+      lang: tgtLang,
+      copy: await localizeBriefCopy(brief, tgtLang),
+    });
   }
 
   const briefRows = variants.flatMap(({ lang, copy }) =>
@@ -327,12 +310,7 @@ export async function runOpportunity(opportunityId: string): Promise<RunResult> 
       angle: copy.angle,
       market: opp.market,
       language: lang,
-      copy: {
-        hook: copy.hook,
-        body: copy.formats[format],
-        captions: copy.captions,
-        script: copy.script,
-      } as Json,
+      copy: briefRowCopy(copy, format) as unknown as Json,
     })),
   );
 

@@ -10,16 +10,42 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function str(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+
+function parseBeats(
+  raw: unknown,
+): { time: string; label: string; action: string }[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const beats = raw.flatMap((b) => {
+    if (!b || typeof b !== "object") return [];
+    const o = b as Record<string, unknown>;
+    return [
+      {
+        time: str(o.time) ?? "",
+        label: str(o.label) ?? "",
+        action: str(o.action) ?? "",
+      },
+    ];
+  });
+  return beats.length ? beats : undefined;
+}
+
 function parseCopy(raw: unknown): BriefRow["copy"] {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, unknown>;
   return {
-    hook: typeof c.hook === "string" ? c.hook : undefined,
-    body: typeof c.body === "string" ? c.body : undefined,
+    hook: str(c.hook),
+    angle: str(c.angle),
+    concept: str(c.concept),
+    whyItWorks: str(c.whyItWorks),
+    beats: parseBeats(c.beats),
+    body: str(c.body),
     captions: Array.isArray(c.captions)
       ? c.captions.filter((x): x is string => typeof x === "string")
       : undefined,
-    script: typeof c.script === "string" ? c.script : undefined,
+    script: str(c.script),
   };
 }
 

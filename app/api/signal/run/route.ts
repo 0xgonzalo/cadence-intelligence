@@ -1,23 +1,21 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { runSignalPoll } from "@/lib/signal/poll";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * WATCH + DETECT tick for the agent loop. Bearer-gated for cron/n8n; runs with
- * the service client so it sweeps every artist's catalog regardless of RLS.
+ * Session-gated counterpart to the cron poll: lets a signed-in user trigger a
+ * WATCH + DETECT tick from the UI ("Refresh signals" on the Radar). Auth is the
+ * Supabase session; the sweep itself runs with the service client, same as cron.
  */
-export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json(
-      { error: "CRON_SECRET is not configured" },
-      { status: 500 },
-    );
-  }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+export async function POST() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

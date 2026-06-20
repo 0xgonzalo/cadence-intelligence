@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ArtistSearchResult, ArtistTrack } from "@/lib/partners/musixmatch";
+import type { ArtistCandidate, ArtistTrack } from "@/lib/partners/musixmatch";
 
 const labelCls =
   "font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground";
@@ -18,9 +18,9 @@ export function OnboardForm() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [artists, setArtists] = useState<ArtistSearchResult[]>([]);
+  const [artists, setArtists] = useState<ArtistCandidate[]>([]);
 
-  const [artist, setArtist] = useState<ArtistSearchResult | null>(null);
+  const [artist, setArtist] = useState<ArtistCandidate | null>(null);
   const [loadingTracks, setLoadingTracks] = useState(false);
   const [tracks, setTracks] = useState<ArtistTrack[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -38,7 +38,7 @@ export function OnboardForm() {
       const res = await fetch(`/api/catalog?q=${encodeURIComponent(q)}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Search failed");
-      setArtists(json.data as ArtistSearchResult[]);
+      setArtists(json.data as ArtistCandidate[]);
       setSearched(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
@@ -47,7 +47,7 @@ export function OnboardForm() {
     }
   }
 
-  async function pickArtist(a: ArtistSearchResult) {
+  async function pickArtist(a: ArtistCandidate) {
     setArtist(a);
     setLoadingTracks(true);
     setError(null);
@@ -160,12 +160,23 @@ export function OnboardForm() {
                   <button
                     type="button"
                     onClick={() => pickArtist(a)}
-                    className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-foreground/40"
+                    className="flex w-full flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-foreground/40"
                   >
-                    <span className="text-sm font-medium">{a.name}</span>
-                    {a.country ? (
-                      <span className={labelCls}>{a.country}</span>
-                    ) : null}
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium">{a.name}</span>
+                      {a.country ? (
+                        <span className={labelCls}>{a.country}</span>
+                      ) : null}
+                    </span>
+                    {a.topTracks.length > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {a.topTracks.join(" · ")}
+                      </span>
+                    ) : (
+                      <span className="text-xs italic text-muted-foreground/70">
+                        no tracks on Musixmatch
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { searchArtists, getArtistTracks } from "@/lib/partners/musixmatch";
+import {
+  searchArtistCandidates,
+  getArtistTracks,
+} from "@/lib/partners/musixmatch";
 
 export const runtime = "nodejs";
 
@@ -29,7 +32,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: await getArtistTracks(artistId, limit) });
     }
     if (q) {
-      return NextResponse.json({ data: await searchArtists(q) });
+      return NextResponse.json({ data: await searchArtistCandidates(q) });
     }
     return NextResponse.json(
       { error: "Provide a `q` (artist name) or `artistId` query param" },

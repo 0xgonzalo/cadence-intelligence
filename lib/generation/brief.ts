@@ -24,6 +24,53 @@ export const FORMAT_KEYS = [
   "faceless",
 ] as const;
 
+export type FormatKey = (typeof FORMAT_KEYS)[number];
+
+/** A single timed beat in a content piece's shot list. */
+export const ContentBeatSchema = z.object({
+  time: z
+    .string()
+    .describe(
+      'The timecode or position for this beat. Video → a seconds window like "0–3s" or "3–8s"; carousel → "Slide 1"; static post → "Frame".',
+    ),
+  label: z
+    .string()
+    .describe(
+      'Two-or-three word name for the beat, e.g. "Hook", "Build", "Reveal", "Payoff", "CTA".',
+    ),
+  action: z
+    .string()
+    .describe(
+      "Concrete, shootable direction — exactly what is on screen, said, or shown in this beat.",
+    ),
+});
+
+/** The detailed, per-platform plan for one content piece. */
+export const FormatPlanSchema = z.object({
+  concept: z
+    .string()
+    .describe(
+      "One vivid sentence describing what THIS specific piece of content is.",
+    ),
+  whyItWorks: z
+    .string()
+    .describe(
+      "Why this content is valuable right now: tie it to the momentum signal, the target market, and the platform behaviour it exploits. 1–2 sentences.",
+    ),
+  beats: z
+    .array(ContentBeatSchema)
+    .min(2)
+    .describe(
+      "The timed structure as an ordered shot list. The FIRST beat is the hook and MUST state its timing. Cover the full arc through to the call-to-action.",
+    ),
+  captions: z
+    .array(z.string())
+    .min(1)
+    .describe(
+      "1–3 ready-to-post caption options tailored to this format and market (include hashtags where natural).",
+    ),
+});
+
 export const BriefCopySchema = z.object({
   hook: z
     .string()
@@ -35,23 +82,22 @@ export const BriefCopySchema = z.object({
     .describe("The single creative angle this content push leans into."),
   formats: z
     .object({
-      reel: z.string(),
-      tiktok: z.string(),
-      short: z.string(),
-      lyricVideo: z.string(),
-      staticPost: z.string(),
-      carousel: z.string(),
-      faceless: z.string(),
+      reel: FormatPlanSchema,
+      tiktok: FormatPlanSchema,
+      short: FormatPlanSchema,
+      lyricVideo: FormatPlanSchema,
+      staticPost: FormatPlanSchema,
+      carousel: FormatPlanSchema,
+      faceless: FormatPlanSchema,
     })
-    .describe("Platform-tailored copy, one draft per format."),
-  captions: z
-    .array(z.string())
-    .describe("2–4 ready-to-post caption options for the target market."),
+    .describe("Platform-tailored content plan, one per format."),
   script: z
     .string()
     .describe("A short voiceover / script for the video formats."),
 });
 
+export type ContentBeat = z.infer<typeof ContentBeatSchema>;
+export type FormatPlan = z.infer<typeof FormatPlanSchema>;
 export type BriefCopy = z.infer<typeof BriefCopySchema>;
 
 /** Derived, persist-safe intelligence the generator reads (no lyric text). */
@@ -75,6 +121,27 @@ export interface BriefInput {
   /** Live, display-only lyric hook (< 15 words). Inspiration only — not stored. */
   hookSnippet?: string | null;
 }
+
+/**
+ * Per-format playbook: the platform timing rules and structural expectations
+ * the model must respect. Fed into the prompt so every plan is shootable and
+ * platform-native rather than generic.
+ */
+const FORMAT_GUIDE: Record<FormatKey, string> = {
+  reel: "Instagram Reel · vertical 9:16 · 15–30s. Land the hook in the first 3 seconds; close on a clear CTA.",
+  tiktok:
+    "TikTok · vertical 9:16 · 15–45s. Native and fast — hook in the first 2 seconds, no slow intro.",
+  short:
+    "YouTube Short · vertical 9:16 · under 60s. Cold open immediately; deliver the payoff before 50s.",
+  lyricVideo:
+    "Lyric video clip · 15–30s. Kinetic on-screen text synced to the beat — original paraphrased lines only, never the verbatim lyric.",
+  staticPost:
+    "Single static image post · one frame. The hook and value must read in under 2 seconds.",
+  carousel:
+    "Carousel · 5–7 slides. Slide 1 is the hook; every slide earns the swipe; the final slide is the CTA.",
+  faceless:
+    "Faceless · B-roll / text-over-video, no creator on camera. Voiceover or captions carry it; hook in the first 3 seconds.",
+};
 
 function clipWindowLabel(intel: BriefIntelligence): string | null {
   if (intel.clipStartMs == null || intel.clipEndMs == null) return null;
@@ -116,18 +183,29 @@ export function buildBriefPrompt(input: BriefInput): string {
       `Anchor hook line (display-only, < 15 words — do not reproduce verbatim): "${hook}".`,
     );
   }
-  lines.push(`Produce platform-tailored copy for: ${FORMAT_KEYS.join(", ")}.`);
+  const playbook = FORMAT_KEYS.map((f) => `- ${f}: ${FORMAT_GUIDE[f]}`);
 
   return [
     "Create a content brief that turns this catalog momentum into a multiformat content package.",
     "",
     ...lines,
+    "",
+    "For EACH format produce a precise, shootable plan:",
+    "- concept: what this specific piece of content actually is.",
+    "- why it works: why this content is valuable for the artist right now, tied to the momentum signal, the market and the platform behaviour it exploits.",
+    "- a timed beat-by-beat structure that follows the platform's time rules — the first beat is the hook and MUST state its timing.",
+    "- 1–3 captions tailored to that format and market.",
+    "Be specific to each format — do not repeat the same plan across formats.",
+    "",
+    "Format playbook (respect these time rules and structures):",
+    ...playbook,
   ].join("\n");
 }
 
 const SYSTEM_PROMPT = [
   "You are CADENCE's content strategist for music marketing.",
   "You turn catalog momentum into ready-to-shoot, platform-native content.",
+  "Every format gets a precise, shootable plan: a concept, a reason it is valuable right now, a timed beat-by-beat structure that obeys the platform's time rules, and tailored captions.",
   "Output original copy only — never reproduce song lyrics. Any hook must be your own line and fewer than 15 words.",
   "Match the brand voice exactly and localize tone to the target market.",
 ].join(" ");
@@ -142,4 +220,45 @@ export async function generateBrief(input: BriefInput): Promise<BriefCopy> {
     system: SYSTEM_PROMPT,
     prompt: buildBriefPrompt(input),
   });
+}
+
+const LOCALIZE_SYSTEM = [
+  "You are a professional localizer for music-marketing content briefs.",
+  "Translate every human-readable string into the target language, preserving meaning, tone, hashtags, @mentions and emoji.",
+  'Keep every timecode (e.g. "0–3s", "Slide 1") and the JSON structure exactly as given.',
+  "Do not invent, add or drop content — only translate what is provided.",
+].join(" ");
+
+/**
+ * Localize an entire brief into `lang` in a single structured pass (one gateway
+ * call, not field-by-field). Degrades gracefully to the source copy if the
+ * gateway is unavailable, so generation never fails on a missing translation.
+ */
+export async function localizeBriefCopy(
+  copy: BriefCopy,
+  lang: string,
+): Promise<BriefCopy> {
+  try {
+    return await generateStructured({
+      schema: BriefCopySchema,
+      system: LOCALIZE_SYSTEM,
+      prompt: `Target language: ${lang}\n\n${JSON.stringify(copy)}`,
+    });
+  } catch {
+    return copy;
+  }
+}
+
+/** The persisted, per-format `copy` payload for a single brief row. */
+export function briefRowCopy(copy: BriefCopy, format: FormatKey) {
+  const plan = copy.formats[format];
+  return {
+    hook: copy.hook,
+    angle: copy.angle,
+    concept: plan.concept,
+    whyItWorks: plan.whyItWorks,
+    beats: plan.beats,
+    captions: plan.captions,
+    script: copy.script,
+  };
 }

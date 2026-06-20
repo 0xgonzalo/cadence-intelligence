@@ -152,6 +152,37 @@ export async function searchArtists(
   }));
 }
 
+/**
+ * Same-named artists are common, and Musixmatch `artist.search` carries no
+ * image or popularity to tell them apart. The reliable signal is each artist's
+ * own top tracks, so this enriches every candidate with its biggest song titles
+ * (resolved by `artist_id`, so they always map to the right act). Track lookups
+ * run in parallel and degrade to `[]` per-artist, so one flaky lookup never
+ * fails the whole search.
+ */
+export interface ArtistCandidate extends ArtistSearchResult {
+  topTracks: string[];
+}
+
+export async function searchArtistCandidates(
+  query: string,
+  tracksPerArtist = 3,
+): Promise<ArtistCandidate[]> {
+  const artists = await searchArtists(query);
+  return Promise.all(
+    artists.map(async (artist) => {
+      let topTracks: string[] = [];
+      try {
+        const tracks = await getArtistTracks(artist.artistId, tracksPerArtist);
+        topTracks = tracks.map((t) => t.title);
+      } catch {
+        topTracks = [];
+      }
+      return { ...artist, topTracks };
+    }),
+  );
+}
+
 // --- track.search → artist catalog -----------------------------------------
 
 const ArtistTracksBodySchema = z

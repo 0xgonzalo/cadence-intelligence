@@ -19,10 +19,12 @@ export function CollabRadar({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [foundNone, setFoundNone] = useState(false);
 
   async function findCreators() {
     setPending(true);
     setError(null);
+    setFoundNone(false);
     try {
       const res = await fetch("/api/collab", {
         method: "POST",
@@ -31,6 +33,7 @@ export function CollabRadar({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Collab search failed");
+      setFoundNone(Array.isArray(json.data) && json.data.length === 0);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Collab search failed");
@@ -61,12 +64,12 @@ export function CollabRadar({
       {leads.length === 0 ? (
         <Card className="border-dashed p-10 text-center">
           <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-            No leads yet
+            {foundNone ? "No creators found" : "No leads yet"}
           </p>
           <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-            Scan for real TikTok UGC creators driving this track, ranked by
-            market overlap, reach, and fit — with an outreach draft for the top
-            leads.
+            {foundNone
+              ? "Scan complete — Songstats has no TikTok UGC creators for this track yet. Check back as the track picks up activity."
+              : "Scan for real TikTok UGC creators driving this track, ranked by market overlap, reach, and fit — with an outreach draft for the top leads."}
           </p>
         </Card>
       ) : (

@@ -4,6 +4,7 @@ import {
   OpportunityCard,
   type RadarOpportunity,
 } from "@/components/radar/OpportunityCard";
+import { RefreshSignals } from "@/components/radar/RefreshSignals";
 
 export const dynamic = "force-dynamic";
 
@@ -87,9 +88,12 @@ export default async function RadarPage({
             worth acting on — newest first.
           </p>
         </div>
-        <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          {opportunities.length} signal{opportunities.length === 1 ? "" : "s"}
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            {opportunities.length} signal{opportunities.length === 1 ? "" : "s"}
+          </span>
+          <RefreshSignals />
+        </div>
       </div>
 
       {error ? (

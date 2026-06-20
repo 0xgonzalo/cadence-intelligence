@@ -7,6 +7,7 @@ import {
   getHookSnippet,
   getRichsync,
   searchArtists,
+  searchArtistCandidates,
   getArtistTracks,
 } from "@/lib/partners/musixmatch";
 
@@ -175,6 +176,63 @@ describe("musixmatch adapter", () => {
       mockFetch.mockResolvedValue(mxmResponse("", 404));
 
       expect(await searchArtists("zzzznotanartist")).toEqual([]);
+    });
+  });
+
+  describe("searchArtistCandidates", () => {
+    it("enriches each same-named candidate with its own top tracks", async () => {
+      mockFetch
+        .mockResolvedValueOnce(
+          mxmResponse({
+            artist_list: [
+              {
+                artist: {
+                  artist_id: 1,
+                  artist_name: "Varese",
+                  artist_country: "AR",
+                },
+              },
+              { artist: { artist_id: 2, artist_name: "Varese" } },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(
+          mxmResponse({
+            track_list: [
+              { track: { track_id: 10, track_name: "Derrumbe" } },
+              { track: { track_id: 11, track_name: "Ciclos" } },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(mxmResponse({ track_list: [] }));
+
+      const candidates = await searchArtistCandidates("varese");
+
+      expect(candidates).toEqual([
+        {
+          artistId: "1",
+          name: "Varese",
+          country: "AR",
+          topTracks: ["Derrumbe", "Ciclos"],
+        },
+        { artistId: "2", name: "Varese", country: null, topTracks: [] },
+      ]);
+    });
+
+    it("degrades a candidate to no tracks when its lookup throws", async () => {
+      mockFetch
+        .mockResolvedValueOnce(
+          mxmResponse({
+            artist_list: [{ artist: { artist_id: 1, artist_name: "Varese" } }],
+          }),
+        )
+        .mockRejectedValueOnce(new Error("track lookup failed"));
+
+      const candidates = await searchArtistCandidates("varese");
+
+      expect(candidates).toEqual([
+        { artistId: "1", name: "Varese", country: null, topTracks: [] },
+      ]);
     });
   });
 

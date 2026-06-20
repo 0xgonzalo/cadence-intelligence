@@ -132,21 +132,20 @@ export async function getTrackAudienceMarkets(
 
 // --- TikTok / UGC creators -------------------------------------------------
 
-const CreatorRowSchema = z
+const ActivityRowSchema = z
   .object({
-    handle: z.string().optional(),
-    username: z.string().optional(),
-    market: z.string().optional(),
-    country_code: z.string().optional(),
-    reach: z.coerce.number().optional(),
-    followers: z.coerce.number().optional(),
+    source: z.string().optional(),
+    activity_text: z.string().optional(),
+    activity_type: z.string().optional(),
+    activity_date: z.string().optional(),
+    activity_tier: z.coerce.number().optional(),
   })
   .passthrough();
 
-const CreatorsEnvelopeSchema = z
+const ActivitiesEnvelopeSchema = z
   .object({
-    data: z.array(CreatorRowSchema).optional(),
-    creators: z.array(CreatorRowSchema).optional(),
+    activities: z.array(ActivityRowSchema).optional(),
+    data: z.array(ActivityRowSchema).optional(),
   })
   .passthrough();
 
@@ -156,25 +155,62 @@ export interface TikTokCreator {
   reach: number | null;
 }
 
+/** Parse "103K"/"1.2M"/"2401" follower counts into an absolute number. */
+function parseFollowerCount(raw: string): number | null {
+  const m = raw.trim().match(/^([\d.,]+)\s*([KMB]?)$/i);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(/,/g, ""));
+  if (!Number.isFinite(n)) return null;
+  const mult =
+    { "": 1, K: 1e3, M: 1e6, B: 1e9 }[m[2].toUpperCase()] ?? 1;
+  return Math.round(n * mult);
+}
+
 /**
- * Top TikTok creators driving UGC for a track (used by the Phase-5 collab
- * radar). Endpoint/response shape is the least-certain of the three — confirm
- * the exact path (`/tracks/...`) against a live call before relying on it.
+ * Extract a creator from a TikTok activity line. The activities endpoint never
+ * exposes the real @username (its `activity_url` is anonymized), so the only
+ * identity available is the display name in `activity_text`, formatted as
+ * "New video by {name} ({followers} Followers)".
+ */
+function parseCreatorActivity(
+  text: string,
+): { handle: string; reach: number | null } | null {
+  const m = text.match(/by\s+(.+?)\s*\(([\d.,]+\s*[KMB]?)\s+Followers?\)/i);
+  if (!m) return null;
+  const handle = m[1].trim();
+  if (!handle) return null;
+  return { handle, reach: parseFollowerCount(m[2]) };
+}
+
+/**
+ * Real TikTok creators driving UGC for a track (used by the collab radar).
+ * Sourced from `/tracks/activities` (verified live): `/tracks/stats` only
+ * returns aggregate counts, never individual creators. Creator identity is the
+ * display name parsed from each video activity — Songstats anonymizes the real
+ * @handle/profile URL. Returns one entry per creator (deduped, highest reach).
  */
 export async function getTikTokCreators(isrc: string): Promise<TikTokCreator[]> {
-  const json = await songstatsGet("/tracks/stats", {
+  const json = await songstatsGet("/tracks/activities", {
     isrc,
     source: "tiktok",
-    with_creators: "true",
   });
-  const parsed = CreatorsEnvelopeSchema.parse(json);
-  const rows = parsed.creators ?? parsed.data ?? [];
+  const parsed = ActivitiesEnvelopeSchema.parse(json);
+  const rows = parsed.activities ?? parsed.data ?? [];
 
-  return rows
-    .map((r) => ({
-      handle: r.handle ?? r.username ?? "",
-      market: (r.market ?? r.country_code ?? null)?.toUpperCase() ?? null,
-      reach: r.reach ?? r.followers ?? null,
-    }))
-    .filter((c) => c.handle);
+  const byHandle = new Map<string, TikTokCreator>();
+  for (const row of rows) {
+    if (row.activity_type && row.activity_type !== "video") continue;
+    if (!row.activity_text) continue;
+    const creator = parseCreatorActivity(row.activity_text);
+    if (!creator) continue;
+    const existing = byHandle.get(creator.handle);
+    if (!existing || (creator.reach ?? 0) > (existing.reach ?? 0)) {
+      byHandle.set(creator.handle, {
+        handle: creator.handle,
+        market: null,
+        reach: creator.reach,
+      });
+    }
+  }
+  return [...byHandle.values()];
 }
