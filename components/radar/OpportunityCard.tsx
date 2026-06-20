@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 
 export interface RadarOpportunity {
   id: string;
-  trackTitle: string;
+  kind: "track" | "show";
+  title: string;
   reason: string | null;
   market: string | null;
   language: string | null;
@@ -32,8 +33,9 @@ export function OpportunityCard({
   opportunity: RadarOpportunity;
   index?: number;
 }) {
-  const { trackTitle, reason, market, language, status, delta } = opportunity;
+  const { kind, title, reason, market, language, status, delta } = opportunity;
   const isNew = status === "new";
+  const signalLabel = kind === "show" ? "Live Signal" : "Rising Signal";
   const pct = delta ? Math.round(delta.pct * 100) : null;
 
   return (
@@ -60,7 +62,7 @@ export function OpportunityCard({
               isNew && "animate-signal",
             )}
           />
-          Rising Signal
+          {signalLabel}
         </span>
         <Badge variant={isNew ? "brand" : "outline"}>
           {STATUS_LABEL[status] ?? status}
@@ -69,7 +71,7 @@ export function OpportunityCard({
 
       <div className="relative px-5">
         <h3 className="text-lg font-semibold leading-tight tracking-tight transition-colors group-hover:text-brand-bright">
-          {trackTitle}
+          {title}
         </h3>
         {reason ? (
           <p className="mt-1 text-sm text-muted-foreground">{reason}</p>

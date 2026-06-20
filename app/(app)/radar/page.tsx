@@ -38,7 +38,7 @@ export default async function RadarPage({
   let query = supabase
     .from("content_opportunities")
     .select(
-      "id, reason, market, language, status, signal_delta, detected_at, tracks(title, isrc)",
+      "id, reason, market, language, status, signal_delta, detected_at, tracks(title, isrc), artists(name)",
     )
     .order("detected_at", { ascending: false });
   if (artist) query = query.eq("artist_id", artist);
@@ -50,16 +50,20 @@ export default async function RadarPage({
         .data?.name ?? null
     : null;
 
-  const opportunities: RadarOpportunity[] = (data ?? []).map((row) => ({
-    id: row.id,
-    trackTitle: row.tracks?.title ?? row.tracks?.isrc ?? "Untitled track",
-    reason: row.reason,
-    market: row.market,
-    language: row.language,
-    status: row.status,
-    delta: parseDelta(row.signal_delta),
-    detectedAt: row.detected_at,
-  }));
+  const opportunities: RadarOpportunity[] = (data ?? []).map((row) => {
+    const trackTitle = row.tracks?.title ?? row.tracks?.isrc ?? null;
+    return {
+      id: row.id,
+      kind: trackTitle ? "track" : "show",
+      title: trackTitle ?? row.artists?.name ?? "Untitled signal",
+      reason: row.reason,
+      market: row.market,
+      language: row.language,
+      status: row.status,
+      delta: parseDelta(row.signal_delta),
+      detectedAt: row.detected_at,
+    };
+  });
 
   return (
     <div>

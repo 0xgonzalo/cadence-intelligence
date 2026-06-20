@@ -112,7 +112,10 @@ export interface BriefIntelligence {
 }
 
 export interface BriefInput {
-  track: Pick<Track, "title" | "isrc">;
+  /** The catalog track, or null for an event-driven (live-show) signal. */
+  track: Pick<Track, "title" | "isrc"> | null;
+  /** Artist name — used to frame the subject when there is no track. */
+  artistName?: string | null;
   intelligence: BriefIntelligence;
   opportunity: Pick<ContentOpportunity, "market" | "language" | "reason"> & {
     signalDelta?: SignalDelta;
@@ -162,9 +165,15 @@ export function buildBriefPrompt(input: BriefInput): string {
     : null;
 
   const lines: string[] = [];
-  lines.push(
-    `Track: "${track.title}"${track.isrc ? ` (ISRC ${track.isrc})` : ""}.`,
-  );
+  if (track) {
+    lines.push(
+      `Track: "${track.title}"${track.isrc ? ` (ISRC ${track.isrc})` : ""}.`,
+    );
+  } else {
+    lines.push(
+      `Subject: ${input.artistName ?? "the artist"} — this is a live-show moment, not a single track. Promote the upcoming concert and the artist's catalog for fans in this market.`,
+    );
+  }
   lines.push(
     `Rising market: ${opp.market}${
       opp.language ? ` (target language ${opp.language})` : ""

@@ -76,6 +76,32 @@ describe("buildBriefPrompt", () => {
     expect(prompt).toContain("BR");
     expect(prompt).not.toContain("we were dancing in the dark");
   });
+
+  it("describes a live-show subject when there is no track", () => {
+    const prompt = buildBriefPrompt({
+      ...baseInput,
+      track: null,
+      artistName: "Ed Sheeran",
+      hookSnippet: null,
+      intelligence: {
+        themes: [],
+        mood: null,
+        language: null,
+        bpm: null,
+        clipStartMs: null,
+        clipEndMs: null,
+        visualMood: null,
+      },
+      opportunity: {
+        market: "MX",
+        language: null,
+        reason: "Upcoming show: Ed Sheeran at Estadio Ciudad de los Deportes",
+      },
+    });
+    expect(prompt).toContain("Ed Sheeran");
+    expect(prompt).not.toContain('Track: "');
+    expect(prompt).toContain("MX");
+  });
 });
 
 describe("generateBrief", () => {

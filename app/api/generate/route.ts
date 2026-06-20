@@ -53,19 +53,21 @@ export async function POST(request: Request) {
   const { data: opp, error: oppErr } = await supabase
     .from("content_opportunities")
     .select(
-      "id, artist_id, track_id, market, language, reason, tracks(id, title, isrc, mxm_track_id, track_intelligence(themes, mood, language, bpm, clip_start_ms, clip_end_ms, visual_mood))",
+      "id, artist_id, track_id, market, language, reason, artists(name), tracks(id, title, isrc, mxm_track_id, track_intelligence(themes, mood, language, bpm, clip_start_ms, clip_end_ms, visual_mood))",
     )
     .eq("id", opportunityId)
     .single();
-  if (oppErr || !opp || !opp.tracks) {
+  if (oppErr || !opp) {
     return NextResponse.json(
-      { error: "Opportunity or track not found" },
+      { error: "Opportunity not found" },
       { status: 404 },
     );
   }
 
+  // Event-driven (live-show) signals have no track — the brief is generated
+  // from the show context instead of track intelligence.
   const track = opp.tracks;
-  const intel = track.track_intelligence;
+  const intel = track?.track_intelligence ?? null;
 
   const { data: config } = await supabase
     .from("agent_config")
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
 
   // Live, display-only hook for inspiration — fetched, used in-flight, never stored.
   let hookSnippet: string | null = null;
-  if (track.mxm_track_id) {
+  if (track?.mxm_track_id) {
     try {
       hookSnippet = await getHookSnippet(track.mxm_track_id);
     } catch {
@@ -84,7 +86,8 @@ export async function POST(request: Request) {
   }
 
   const input: BriefInput = {
-    track: { title: track.title, isrc: track.isrc },
+    track: track ? { title: track.title, isrc: track.isrc } : null,
+    artistName: opp.artists?.name ?? null,
     intelligence: {
       themes: intel?.themes ?? [],
       mood: intel?.mood ?? null,
