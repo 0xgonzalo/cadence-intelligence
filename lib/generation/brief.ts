@@ -59,9 +59,9 @@ export const FormatPlanSchema = z.object({
     ),
   beats: z
     .array(ContentBeatSchema)
-    .min(2)
+    .min(1)
     .describe(
-      "The timed structure as an ordered shot list. The FIRST beat is the hook and MUST state its timing. Cover the full arc through to the call-to-action.",
+      "The timed structure as an ordered shot list. The FIRST beat is the hook and MUST state its timing. Cover the full arc through to the call-to-action. A single-frame static post may have just one beat.",
     ),
   captions: z
     .array(z.string())

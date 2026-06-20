@@ -141,3 +141,60 @@ describe("generateBrief", () => {
     expect(result).toEqual(fakeCopy);
   });
 });
+
+describe("BriefCopySchema beat constraints", () => {
+  const plan = (beats: { time: string; label: string; action: string }[]) => ({
+    concept: "c",
+    whyItWorks: "w",
+    beats,
+    captions: ["cap"],
+  });
+  const copyWithStatic = (
+    staticBeats: { time: string; label: string; action: string }[],
+  ) => ({
+    hook: "h",
+    angle: "a",
+    formats: {
+      reel: plan([
+        { time: "0–3s", label: "Hook", action: "open" },
+        { time: "3–15s", label: "Payoff", action: "land it" },
+      ]),
+      tiktok: plan([
+        { time: "0–2s", label: "Hook", action: "open" },
+        { time: "2–20s", label: "Payoff", action: "land it" },
+      ]),
+      short: plan([
+        { time: "0–2s", label: "Hook", action: "open" },
+        { time: "2–40s", label: "Payoff", action: "land it" },
+      ]),
+      lyricVideo: plan([
+        { time: "0–3s", label: "Hook", action: "open" },
+        { time: "3–20s", label: "Payoff", action: "land it" },
+      ]),
+      staticPost: plan(staticBeats),
+      carousel: plan([
+        { time: "Slide 1", label: "Hook", action: "open" },
+        { time: "Slide 5", label: "CTA", action: "close" },
+      ]),
+      faceless: plan([
+        { time: "0–3s", label: "Hook", action: "open" },
+        { time: "3–20s", label: "Payoff", action: "land it" },
+      ]),
+    },
+    script: "s",
+  });
+
+  // A static post is a single frame — the model legitimately returns one beat.
+  // The schema must accept that (regression for the show-signal 502).
+  it("accepts a single-frame static post with exactly one beat", () => {
+    const result = BriefCopySchema.safeParse(
+      copyWithStatic([{ time: "Frame", label: "Hook", action: "the image" }]),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("still rejects a format with zero beats", () => {
+    const result = BriefCopySchema.safeParse(copyWithStatic([]));
+    expect(result.success).toBe(false);
+  });
+});
