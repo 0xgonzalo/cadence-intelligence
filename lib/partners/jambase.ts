@@ -3,13 +3,13 @@
  * Used by the signal poll to raise *event-driven* content opportunities (a show
  * in a target market is a reason to publish), complementing momentum triggers.
  *
- * Base/auth follow the JamBase API (https://www.jambase.com/jb-api/v1, `apikey`
- * query param, JSON-LD-style event payloads). The response *shape* below is
- * documentation-derived and has NOT been confirmed against a live call (no
- * JAMBASE_API_KEY was available at build time). The schema is intentionally
- * loose (`.passthrough()`, optional envelopes) so a real response won't throw on
- * shape drift; run a live smoke call and tighten the field mapping once the key
- * is set. See Task 7.1 in the plan.
+ * Base/auth follow the JamBase v3 API (https://api.data.jambase.com/v3, API key
+ * as `Authorization: Bearer <key>`, JSON-LD-style event payloads). The response
+ * shape below is confirmed against a live call: events come back under an
+ * `events` envelope as schema.org Event objects (`name`, `startDate`,
+ * `location` → Place with `name` + `address`, `addressCountry` a Country
+ * object). The schema stays loose (`.passthrough()`, optional envelopes) so
+ * shape drift won't throw.
  *
  * Only derived event metadata (name, date, venue, market) is returned — no
  * Musixmatch lyric content is involved here.
@@ -17,7 +17,7 @@
 import { z } from "zod";
 import { fetchWithTimeout } from "@/lib/http";
 
-const BASE_URL = "https://www.jambase.com/jb-api/v1";
+const BASE_URL = "https://api.data.jambase.com/v3";
 
 function requireApiKey(): string {
   const key = process.env.JAMBASE_API_KEY;
@@ -34,11 +34,13 @@ const CountrySchema = z.union([
     .passthrough(),
 ]);
 
+// Only the fields the mapping reads are declared; everything else (addressRegion,
+// postalCode, x-* extensions) passes through unvalidated. v3 sometimes sends
+// addressRegion as an object ({}), so declaring it as a string would throw.
 const AddressSchema = z
   .object({
     addressCountry: CountrySchema.optional(),
     addressLocality: z.string().optional(),
-    addressRegion: z.string().optional(),
   })
   .passthrough();
 
@@ -101,12 +103,15 @@ function toUpcomingEvent(ev: ParsedEvent): UpcomingEvent | null {
  */
 export async function getEvents(artistName: string): Promise<UpcomingEvent[]> {
   const url = new URL(`${BASE_URL}/events`);
-  url.searchParams.set("apikey", requireApiKey());
   url.searchParams.set("artistName", artistName);
-  url.searchParams.set("eventType", "concerts");
+  url.searchParams.set("eventType", "concert");
+  url.searchParams.set("perPage", "100");
 
   const res = await fetchWithTimeout(url.toString(), {
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${requireApiKey()}`,
+    },
   });
   if (!res.ok) {
     throw new Error(

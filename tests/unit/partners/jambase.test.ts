@@ -50,10 +50,12 @@ describe("jambase adapter", () => {
 
     const events = await getEvents("Boygenius");
 
-    const [url] = mockFetch.mock.calls[0];
+    const [url, init] = mockFetch.mock.calls[0];
     expect(url).toContain("/events");
-    expect(url).toContain("apikey=test-key");
     expect(url).toContain("Boygenius");
+    expect(url).toContain("eventType=concert");
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    expect(headers.authorization).toBe("Bearer test-key");
     expect(events).toEqual([
       {
         name: "Live at the Forum",
