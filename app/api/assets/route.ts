@@ -167,15 +167,15 @@ export async function POST(request: Request) {
     )
     .eq("id", opportunityId)
     .single();
-  if (oppErr || !opp || !opp.tracks) {
-    return NextResponse.json(
-      { error: "Opportunity or track not found" },
-      { status: 404 },
-    );
+  if (oppErr || !opp) {
+    return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
   }
 
+  // Event-driven (live-show) opportunities have no catalog track. Stems come
+  // from the uploaded audio and the voiceover from the brief copy, so a package
+  // is still buildable; only the lyric-clip step needs a matched track.
   const track = opp.tracks;
-  const intel = track.track_intelligence;
+  const intel = track?.track_intelligence ?? null;
   const briefs = (opp.briefs ?? []) as BriefRow[];
   const service = createServiceClient();
   const results: Record<string, Json> = {};
@@ -217,7 +217,7 @@ export async function POST(request: Request) {
       if (wantAcapella) results.acapella = note;
     } else {
       try {
-        const fileId = await uploadAudio(source, `${track.id}.mp3`);
+        const fileId = await uploadAudio(source, `${oppId}.mp3`);
         await requestSplit(fileId, "vocals");
         const split = await pollSplit(fileId);
         if (wantInstrumental && split.backUrl) {
@@ -275,7 +275,7 @@ export async function POST(request: Request) {
   // --- lyric clip (LIVE richsync → timing window only; no text persisted) --
   if (requested.includes("lyricClip")) {
     try {
-      if (!track.mxm_track_id) {
+      if (!track?.mxm_track_id) {
         results.lyricClip = { skipped: "track not matched to Musixmatch" };
       } else {
         const lines = await getRichsync(track.mxm_track_id);
