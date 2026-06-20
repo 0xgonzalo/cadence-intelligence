@@ -18,11 +18,8 @@ export async function updateSession(req: NextRequest) {
       },
     },
   );
-  const { data: { user } } = await supabase.auth.getUser();
-  const url = req.nextUrl;
-  const isAuthRoute = url.pathname.startsWith("/auth");
-  if (!user && !isAuthRoute) {
-    return NextResponse.redirect(new URL("/auth/login", req.url));
-  }
+  // Refresh the session cookie if present, but do not gate access.
+  // The app is open to everyone; unauthenticated visitors can browse freely.
+  await supabase.auth.getUser();
   return res;
 }
