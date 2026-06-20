@@ -289,6 +289,44 @@
     opacity: 0;
   }
 }
+/* Tactical grid slowly panning across the landing field. */
+@keyframes grid-drift {
+  to {
+    background-position:
+      56px 56px,
+      56px 56px;
+  }
+}
+/* Thin horizontal scan line sweeping down the field. */
+@keyframes scan-y {
+  0% {
+    transform: translateY(-12vh);
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(112vh);
+    opacity: 0;
+  }
+}
+/* Faint motes drifting upward through the field. */
+@keyframes mote {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+  12%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-46vh) scale(0.4);
+    opacity: 0;
+  }
+}
 
 .animate-rise {
   animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -307,6 +345,33 @@
 }
 .animate-sonar {
   animation: sonar 3.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.animate-grid-drift {
+  animation: grid-drift 9s linear infinite;
+}
+.animate-scan-y {
+  animation: scan-y 8s ease-in-out infinite;
+}
+.animate-mote {
+  animation: mote 9s ease-in-out infinite;
+}
+
+/* Drifting tactical grid plane behind the landing hero. */
+.field-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      oklch(0.62 0.11 191 / 0.08) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      oklch(0.62 0.11 191 / 0.08) 1px,
+      transparent 1px
+    );
+  background-size:
+    56px 56px,
+    56px 56px;
 }
 
 /* ── Brand utilities ──────────────────────────────────────────── */
@@ -342,6 +407,9 @@
   .animate-spin-slow,
   .animate-radar,
   .animate-sonar,
+  .animate-grid-drift,
+  .animate-scan-y,
+  .animate-mote,
   .text-phosphor,
   body::before {
     animation: none;

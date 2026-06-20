@@ -18,8 +18,14 @@ export async function updateSession(req: NextRequest) {
       },
     },
   );
-  // Refresh the session cookie if present, but do not gate access.
-  // The app is open to everyone; unauthenticated visitors can browse freely.
-  await supabase.auth.getUser();
+  // The app is open to everyone. Instead of gating, give every visitor a real
+  // (anonymous) auth.users session so user-scoped tables and RLS keep working
+  // without a login. Any existing session (e.g. magic-link) is left untouched.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    await supabase.auth.signInAnonymously();
+  }
   return res;
 }
