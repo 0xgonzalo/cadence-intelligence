@@ -63,15 +63,16 @@ export default async function RadarPage({
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-6">
+      <div className="animate-rise flex flex-wrap items-end justify-between gap-3 border-b border-border pb-6">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+            <span className="size-1.5 animate-signal rounded-full bg-brand" />
             {artistName ? (
               <>
                 Content Radar ·{" "}
                 <Link
                   href="/roster"
-                  className="text-foreground underline-offset-4 hover:underline"
+                  className="text-brand-bright underline-offset-4 hover:underline"
                 >
                   all artists
                 </Link>
@@ -80,7 +81,7 @@ export default async function RadarPage({
               "Content Radar"
             )}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-phosphor">
             {artistName ? `Rising for ${artistName}` : "Rising in your catalog"}
           </h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
@@ -90,7 +91,10 @@ export default async function RadarPage({
         </div>
         <div className="flex items-center gap-4">
           <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            {opportunities.length} signal{opportunities.length === 1 ? "" : "s"}
+            <span className="text-brand-bright tabular-nums">
+              {opportunities.length}
+            </span>{" "}
+            signal{opportunities.length === 1 ? "" : "s"}
           </span>
           <RefreshSignals />
         </div>
@@ -121,8 +125,8 @@ export default async function RadarPage({
 
 function EmptyState() {
   return (
-    <div className="mt-8 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-20 text-center">
-      <span className="size-2 animate-signal rounded-full bg-foreground" />
+    <div className="animate-rise mt-8 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-20 text-center">
+      <span className="size-2 animate-signal rounded-full bg-brand" />
       <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
         No signals yet
       </p>
@@ -132,7 +136,7 @@ function EmptyState() {
       </p>
       <Link
         href="/onboard"
-        className="mt-2 rounded-lg border border-border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-foreground transition-colors hover:bg-secondary"
+        className="mt-2 rounded-lg border border-brand/40 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-brand-bright transition-all hover:bg-brand/10 hover:[box-shadow:0_0_24px_-8px_var(--brand)]"
       >
         Onboard an artist
       </Link>

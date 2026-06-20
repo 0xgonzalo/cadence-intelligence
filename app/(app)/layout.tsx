@@ -14,12 +14,20 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/70 backdrop-blur-xl">
+        {/* phosphor hairline along the header base */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand/50 to-transparent"
+        />
         <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-4 px-6">
           <div className="flex items-center gap-6">
-            <Link href="/radar" className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-foreground" />
-              <span className="font-mono text-xs uppercase tracking-[0.3em]">
+            <Link href="/radar" className="group flex items-center gap-2.5">
+              <span className="relative flex size-2">
+                <span className="absolute inset-0 animate-signal rounded-full bg-brand" />
+                <span className="relative size-2 rounded-full bg-brand" />
+              </span>
+              <span className="font-mono text-xs uppercase tracking-[0.3em] transition-colors group-hover:text-brand-bright">
                 Cadence
               </span>
             </Link>

@@ -38,32 +38,37 @@ export function OpportunityCard({
 
   return (
     <Card
-      className="animate-rise group relative overflow-hidden p-0 transition-colors hover:border-foreground/30"
+      className="animate-rise group relative overflow-hidden p-0 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-brand/40 hover:shadow-[0_24px_60px_-30px_var(--brand)]"
       style={{ animationDelay: `${index * 70}ms` }}
     >
-      {/* hairline accent that lights up on hover */}
+      {/* hairline accent that ignites teal on hover */}
       <span
         aria-hidden
-        className="absolute inset-x-0 top-0 h-px bg-foreground/15 transition-colors group-hover:bg-foreground/40"
+        className="absolute inset-x-0 top-0 h-px bg-foreground/15 transition-all duration-300 group-hover:bg-brand group-hover:[box-shadow:0_0_12px_1px_var(--brand)]"
+      />
+      {/* corner phosphor bloom, revealed on hover */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-16 size-40 rounded-full bg-brand/20 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
       />
 
-      <div className="flex items-start justify-between gap-4 p-5 pb-3">
+      <div className="relative flex items-start justify-between gap-4 p-5 pb-3">
         <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
           <span
             className={cn(
-              "size-1.5 rounded-full bg-foreground",
+              "size-1.5 rounded-full bg-brand",
               isNew && "animate-signal",
             )}
           />
           Rising Signal
         </span>
-        <Badge variant={isNew ? "solid" : "outline"}>
+        <Badge variant={isNew ? "brand" : "outline"}>
           {STATUS_LABEL[status] ?? status}
         </Badge>
       </div>
 
-      <div className="px-5">
-        <h3 className="text-lg font-semibold leading-tight tracking-tight">
+      <div className="relative px-5">
+        <h3 className="text-lg font-semibold leading-tight tracking-tight transition-colors group-hover:text-brand-bright">
           {trackTitle}
         </h3>
         {reason ? (
@@ -72,15 +77,15 @@ export function OpportunityCard({
       </div>
 
       {delta ? (
-        <div className="mt-4 flex items-end justify-between gap-4 border-t border-border px-5 py-4">
+        <div className="relative mt-4 flex items-end justify-between gap-4 border-t border-border px-5 py-4">
           <div className="flex items-baseline gap-1.5 font-mono tabular-nums">
-            <span aria-hidden className="text-base text-foreground">
+            <span aria-hidden className="text-base text-brand-bright">
               ▲
             </span>
-            <span className="text-4xl font-semibold leading-none tracking-tight">
+            <span className="text-4xl font-semibold leading-none tracking-tight text-brand-bright [text-shadow:0_0_24px_var(--brand-muted)]">
               {pct}
             </span>
-            <span className="text-lg text-muted-foreground">%</span>
+            <span className="text-lg text-brand-bright/70">%</span>
           </div>
           <div className="text-right">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">

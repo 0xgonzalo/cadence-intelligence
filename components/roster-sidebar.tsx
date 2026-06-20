@@ -70,7 +70,7 @@ export function RosterSidebar({ artists }: { artists: SidebarArtist[] }) {
             onClick={toggle}
             title="Expand artists"
             aria-label="Expand artists"
-            className="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+            className="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-brand/50 hover:text-brand-bright"
           >
             <Chevron direction="right" />
           </button>
@@ -95,7 +95,7 @@ export function RosterSidebar({ artists }: { artists: SidebarArtist[] }) {
               onClick={toggle}
               title="Collapse artists"
               aria-label="Collapse artists"
-              className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+              className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-brand-bright"
             >
               <Chevron direction="left" />
             </button>
@@ -105,10 +105,10 @@ export function RosterSidebar({ artists }: { artists: SidebarArtist[] }) {
         <Link
           href="/onboard"
           className={cn(
-            "flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors",
+            "flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors",
             pathname === "/onboard"
-              ? "border-foreground/40 text-foreground"
-              : "text-muted-foreground hover:border-foreground/40 hover:text-foreground",
+              ? "border-brand/50 text-brand-bright"
+              : "border-border text-muted-foreground hover:border-brand/50 hover:text-brand-bright",
           )}
         >
           <span className="text-base leading-none">+</span>
@@ -124,13 +124,22 @@ export function RosterSidebar({ artists }: { artists: SidebarArtist[] }) {
                   key={a.id}
                   href={`/radar?artist=${a.id}`}
                   className={cn(
-                    "truncate rounded-lg px-3 py-2 text-sm transition-colors",
+                    "group/item flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
                     active
-                      ? "bg-secondary text-foreground"
+                      ? "bg-brand/12 text-brand-bright"
                       : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
                   )}
                 >
-                  {a.name}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full transition-colors",
+                      active
+                        ? "bg-brand [box-shadow:0_0_8px_1px_var(--brand)]"
+                        : "bg-muted-foreground/40 group-hover/item:bg-foreground/60",
+                    )}
+                  />
+                  <span className="truncate">{a.name}</span>
                 </Link>
               );
             })}
