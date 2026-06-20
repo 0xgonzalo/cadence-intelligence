@@ -30,6 +30,11 @@ async function songstatsGet(
   const res = await fetchWithTimeout(url.toString(), {
     headers: { apikey: requireApiKey(), accept: "application/json" },
   });
+  // A 404 means the ISRC isn't in Songstats' index yet — their API returns
+  // {result:"error", message:"Track not found…"} and kicks off async ingestion.
+  // For freshly-onboarded catalog that's an expected "no data yet" state, not a
+  // failure, so return null and let callers degrade to empty instead of throwing.
+  if (res.status === 404) return null;
   if (!res.ok) {
     throw new Error(`Songstats ${path} failed: ${res.status} ${res.statusText}`);
   }
@@ -61,6 +66,7 @@ const StatsEnvelopeSchema = z
  */
 export async function getTrackStats(isrc: string): Promise<MomentumSignal[]> {
   const json = await songstatsGet("/tracks/stats", { isrc });
+  if (json === null) return [];
   const parsed = StatsEnvelopeSchema.parse(json);
   const sources = parsed.stats ?? parsed.data ?? [];
   const capturedAt = new Date().toISOString();
@@ -115,6 +121,7 @@ export async function getTrackAudienceMarkets(
   isrc: string,
 ): Promise<AudienceMarket[]> {
   const json = await songstatsGet("/tracks/audience", { isrc });
+  if (json === null) return [];
   const parsed = AudienceEnvelopeSchema.parse(json);
   const rows =
     parsed.audience ??
@@ -194,6 +201,7 @@ export async function getTikTokCreators(isrc: string): Promise<TikTokCreator[]> 
     isrc,
     source: "tiktok",
   });
+  if (json === null) return [];
   const parsed = ActivitiesEnvelopeSchema.parse(json);
   const rows = parsed.activities ?? parsed.data ?? [];
 
