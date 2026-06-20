@@ -11,12 +11,31 @@ type IntelRow = {
   language: string | null;
 } | null;
 
-export default async function CatalogPage() {
+export default async function CatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ artist?: string }>;
+}) {
+  const { artist } = await searchParams;
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  let query = supabase
     .from("tracks")
     .select("id, title, isrc, track_intelligence(themes, mood, language)")
     .order("title", { ascending: true });
+  if (artist) query = query.eq("artist_id", artist);
+
+  const { data, error } = await query;
+
+  const artistName = artist
+    ? (
+        await supabase
+          .from("artists")
+          .select("name")
+          .eq("id", artist)
+          .maybeSingle()
+      ).data?.name ?? null
+    : null;
 
   const tracks = (data ?? []).map((t) => {
     const intel = (t.track_intelligence as IntelRow) ?? null;
@@ -34,11 +53,22 @@ export default async function CatalogPage() {
     <div>
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-6">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
             Catalog Intelligence
+            {artistName ? (
+              <>
+                <span aria-hidden>·</span>
+                <Link
+                  href="/catalog"
+                  className="text-brand-bright underline-offset-4 hover:underline"
+                >
+                  all artists
+                </Link>
+              </>
+            ) : null}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            Your tracks, decoded
+            {artistName ? `${artistName}, decoded` : "Your tracks, decoded"}
           </h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Themes, mood and language derived live from Musixmatch + Cyanite —

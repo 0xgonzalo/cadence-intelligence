@@ -1,26 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/radar", label: "Radar" },
-  { href: "/catalog", label: "Catalog" },
-  { href: "/agent", label: "Agent" },
+  { href: "/radar", label: "Radar", artistScoped: true },
+  { href: "/catalog", label: "Catalog", artistScoped: true },
+  { href: "/agent", label: "Agent", artistScoped: false },
 ];
 
 export function NavLinks() {
   const pathname = usePathname();
+  const artist = useSearchParams().get("artist");
   return (
     <nav className="flex items-center gap-1">
       {LINKS.map((link) => {
         const active =
           pathname === link.href || pathname.startsWith(`${link.href}/`);
+        const href =
+          link.artistScoped && artist
+            ? `${link.href}?artist=${artist}`
+            : link.href;
         return (
           <Link
             key={link.href}
-            href={link.href}
+            href={href}
             className={cn(
               "relative rounded-lg px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] transition-colors",
               active
