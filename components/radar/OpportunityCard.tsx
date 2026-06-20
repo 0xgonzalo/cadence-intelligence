@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { metricLabel } from "@/lib/signal/metric-label";
 
 export interface RadarOpportunity {
   id: string;
@@ -91,7 +92,7 @@ export function OpportunityCard({
           </div>
           <div className="text-right">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              {delta.metric}
+              {metricLabel(delta.metric)}
             </p>
             <p className="mt-0.5 font-mono text-sm tabular-nums text-foreground/80">
               {formatNumber(delta.from)}

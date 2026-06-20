@@ -5,6 +5,7 @@ import {
   type RadarOpportunity,
 } from "@/components/radar/OpportunityCard";
 import { RefreshSignals } from "@/components/radar/RefreshSignals";
+import { momentumReason } from "@/lib/signal/metric-label";
 
 export const dynamic = "force-dynamic";
 
@@ -52,15 +53,22 @@ export default async function RadarPage({
 
   const opportunities: RadarOpportunity[] = (data ?? []).map((row) => {
     const trackTitle = row.tracks?.title ?? row.tracks?.isrc ?? null;
+    const delta = parseDelta(row.signal_delta);
+    // Momentum reasons were historically stored with the raw Songstats metric
+    // key — rebuild from the structured delta so older rows read cleanly too.
+    // Event-driven (show) opps carry a human reason and no delta; keep it.
+    const reason = delta
+      ? momentumReason(delta.metric, delta.pct, row.market)
+      : row.reason;
     return {
       id: row.id,
       kind: trackTitle ? "track" : "show",
       title: trackTitle ?? row.artists?.name ?? "Untitled signal",
-      reason: row.reason,
+      reason,
       market: row.market,
       language: row.language,
       status: row.status,
-      delta: parseDelta(row.signal_delta),
+      delta,
       detectedAt: row.detected_at,
     };
   });

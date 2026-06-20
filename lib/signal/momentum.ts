@@ -4,6 +4,7 @@ import type {
   SignalDelta,
   Thresholds,
 } from "@/lib/domain/types";
+import { momentumReason } from "@/lib/signal/metric-label";
 
 /**
  * Detect content opportunities from a stream of point-in-time signals. Signals
@@ -50,7 +51,7 @@ export function detectOpportunities(
     opportunities.push({
       trackId: latest.trackId,
       market: latest.market,
-      reason: `${latest.metric} +${Math.round(pct * 100)}% in ${latest.market}`,
+      reason: momentumReason(latest.metric, pct, latest.market),
       status: "new",
       signalDelta,
     });
