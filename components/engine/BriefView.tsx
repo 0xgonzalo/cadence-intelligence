@@ -348,7 +348,6 @@ export function BriefView({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {angle ? <Badge variant="solid">{angle}</Badge> : null}
           {[...byLang.keys()].map((lang) => (
             <Badge key={lang} variant="outline">
               {lang}
@@ -368,12 +367,28 @@ export function BriefView({
         <p className="font-mono text-sm text-destructive">{error}</p>
       ) : null}
 
-      {hook ? (
-        <Card className="p-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
-            Hook
-          </p>
-          <p className="mt-2 text-xl font-semibold tracking-tight">“{hook}”</p>
+      {angle || hook ? (
+        <Card className="space-y-5 p-5">
+          {angle ? (
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+                Angle
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground/90">
+                {angle}
+              </p>
+            </div>
+          ) : null}
+          {hook ? (
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+                Hook
+              </p>
+              <p className="mt-2 text-xl font-semibold tracking-tight">
+                “{hook}”
+              </p>
+            </div>
+          ) : null}
         </Card>
       ) : null}
 

@@ -7,11 +7,25 @@ import {
   PackagePreview,
   type PackageAssets,
 } from "@/components/engine/PackagePreview";
+import { momentumReason } from "@/lib/signal/metric-label";
 
 export const dynamic = "force-dynamic";
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
+}
+
+/** Rebuild a readable reason from the structured delta so stored rows that kept
+ *  the raw Songstats metric key (`charted_countries_total …`) read cleanly.
+ *  Event-driven (show) opps carry a human reason and no delta — keep it. */
+function reasonFor(signalDelta: unknown, market: string | null, fallback: string | null): string | null {
+  if (signalDelta && typeof signalDelta === "object") {
+    const d = signalDelta as Record<string, unknown>;
+    const pct = Number(d.pct);
+    const metric = typeof d.metric === "string" ? d.metric : null;
+    if (metric && Number.isFinite(pct)) return momentumReason(metric, pct, market);
+  }
+  return fallback;
 }
 
 function parseBeats(
@@ -59,11 +73,15 @@ export default async function ContentEnginePage({
 
   const { data: opp } = await supabase
     .from("content_opportunities")
-    .select("id, reason, market, language, status, tracks(title, isrc), artists(name)")
+    .select(
+      "id, reason, market, language, status, signal_delta, tracks(title, isrc), artists(name)",
+    )
     .eq("id", opportunityId)
     .single();
 
   if (!opp) notFound();
+
+  const reason = reasonFor(opp.signal_delta, opp.market, opp.reason);
 
   const { data: briefRows } = await supabase
     .from("briefs")
@@ -102,9 +120,9 @@ export default async function ContentEnginePage({
           Content Engine
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
-        {opp.reason ? (
+        {reason ? (
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            {opp.reason}
+            {reason}
           </p>
         ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-2">
