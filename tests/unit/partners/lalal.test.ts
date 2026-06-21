@@ -122,6 +122,57 @@ describe("lalal adapter", () => {
       });
     });
 
+    it("parses a real response that carries an `archive` sibling key", async () => {
+      // LALAL's /check/ nests every file under `result`, alongside a sibling
+      // `archive` slot (null until a bulk download is built). The entry schema
+      // must tolerate that non-file value or the whole parse falls back to
+      // "queued" and every poll times out.
+      mockFetch.mockResolvedValue(
+        jsonResponse({
+          status: "success",
+          result: {
+            archive: null,
+            "file-123": {
+              status: "success",
+              task: { state: "success", progress: 100 },
+              split: {
+                stem_track: "https://lalal/stem.wav",
+                back_track: "https://lalal/back.wav",
+              },
+            },
+          },
+        }),
+      );
+
+      const status = await checkSplit("file-123");
+
+      expect(status.state).toBe("success");
+      expect(status.backUrl).toBe("https://lalal/back.wav");
+    });
+
+    it("surfaces a file-level error (no task object) as a terminal error", async () => {
+      // Pre-processing failures (bad/expired file, quota, etc.) report at the
+      // file level with `status`/`error`/`code` and NO `task` object.
+      mockFetch.mockResolvedValue(
+        jsonResponse({
+          status: "success",
+          result: {
+            archive: null,
+            "file-123": {
+              status: "error",
+              error: "The file has not been uploaded properly or has already been deleted.",
+              code: "file_not_found",
+            },
+          },
+        }),
+      );
+
+      const status = await checkSplit("file-123");
+
+      expect(status.state).toBe("error");
+      expect(status.error).toMatch(/uploaded properly|file_not_found/);
+    });
+
     it("reports in-progress with no urls yet", async () => {
       mockFetch.mockResolvedValue(
         jsonResponse({

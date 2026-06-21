@@ -145,32 +145,40 @@ export interface SplitStatus {
   error?: string | null;
 }
 
+// One file's entry under `result`. Terminal errors that happen BEFORE the
+// split task starts (bad/expired upload, quota, etc.) surface here at the
+// file level (`status`/`error`/`code`) with NO `task` object — distinct from
+// errors raised mid-split inside `task`.
+const CheckEntrySchema = z
+  .object({
+    status: z.string().optional(),
+    error: z.string().nullish(),
+    code: z.string().nullish(),
+    task: z
+      .object({
+        state: z.string().optional(),
+        error: z.string().nullish(),
+      })
+      .passthrough()
+      .optional(),
+    split: z
+      .object({
+        stem_track: z.string().nullish(),
+        back_track: z.string().nullish(),
+      })
+      .passthrough()
+      .nullish(),
+  })
+  .passthrough();
+
 const CheckResponseSchema = z
   .object({
     status: z.string().optional(),
-    result: z
-      .record(
-        z.string(),
-        z
-          .object({
-            task: z
-              .object({
-                state: z.string().optional(),
-                error: z.string().nullish(),
-              })
-              .passthrough()
-              .optional(),
-            split: z
-              .object({
-                stem_track: z.string().nullish(),
-                back_track: z.string().nullish(),
-              })
-              .passthrough()
-              .nullish(),
-          })
-          .passthrough(),
-      )
-      .optional(),
+    // `result` mixes file entries with a sibling `archive` slot (null until a
+    // bulk download is built), so values must tolerate null / non-entry shapes
+    // — a strict object record would fail the whole parse and strand every
+    // poll at the "queued" default.
+    result: z.record(z.string(), CheckEntrySchema.nullable()).optional(),
   })
   .passthrough();
 
@@ -207,13 +215,21 @@ export async function checkSplit(id: string): Promise<SplitStatus> {
     throw new Error(`LALAL check failed: ${res.status} ${res.statusText}`);
   }
   const parsed = CheckResponseSchema.safeParse(await res.json());
-  const entry = parsed.success ? parsed.data.result?.[id] : undefined;
+  const entry = parsed.success ? parsed.data.result?.[id] ?? undefined : undefined;
+
+  // A terminal error can land at the file level (pre-split failure) or inside
+  // the task (mid-split failure). Treat either as "error" so the poller stops
+  // and surfaces the real message instead of timing out as "queued".
+  const errored = entry?.status === "error" || entry?.task?.state === "error";
+  const state = errored
+    ? "error"
+    : normalizeState(entry?.task?.state ?? entry?.status);
 
   return {
-    state: normalizeState(entry?.task?.state),
+    state,
     stemUrl: entry?.split?.stem_track ?? null,
     backUrl: entry?.split?.back_track ?? null,
-    error: entry?.task?.error ?? null,
+    error: entry?.error ?? entry?.task?.error ?? entry?.code ?? null,
   };
 }
 
@@ -238,8 +254,10 @@ export async function pollSplit(
   id: string,
   { intervalMs = 3000, maxAttempts = 40, sleep = defaultSleep }: PollOptions = {},
 ): Promise<SplitStatus> {
+  let lastState: SplitState = "queued";
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const status = await checkSplit(id);
+    lastState = status.state;
     if (TERMINAL.has(status.state)) {
       if (status.state === "error") {
         throw new Error(`LALAL split errored: ${status.error ?? "unknown"}`);
@@ -248,5 +266,7 @@ export async function pollSplit(
     }
     if (attempt < maxAttempts - 1) await sleep(intervalMs);
   }
-  throw new Error(`LALAL split timed out after ${maxAttempts} polls`);
+  throw new Error(
+    `LALAL split timed out after ${maxAttempts} polls (last state: ${lastState})`,
+  );
 }

@@ -93,7 +93,9 @@ export const BriefCopySchema = z.object({
     .describe("Platform-tailored content plan, one per format."),
   script: z
     .string()
-    .describe("A short voiceover / script for the video formats."),
+    .describe(
+      "The spoken voiceover narration for the video formats (reel / tiktok / short / faceless), written as continuous speech the creator reads aloud. It MUST deliver THIS brief: open on the hook, carry the chosen angle through the key on-screen beats, and close on the call-to-action. Roughly 40–60 words (~20 seconds), in the target market language. Original copy only — never read song lyrics.",
+    ),
 });
 
 export type ContentBeat = z.infer<typeof ContentBeatSchema>;
@@ -205,6 +207,11 @@ export function buildBriefPrompt(input: BriefInput): string {
     "- a timed beat-by-beat structure that follows the platform's time rules — the first beat is the hook and MUST state its timing.",
     "- 1–3 captions tailored to that format and market.",
     "Be specific to each format — do not repeat the same plan across formats.",
+    "",
+    "Then write the shared brief essentials:",
+    "- hook: one original, scroll-stopping line (under 15 words) every format can open on.",
+    "- angle: the single creative angle every format leans into.",
+    "- script: the spoken voiceover narration for the video formats. Write it as continuous speech the creator reads aloud — open on the hook, carry the angle through the key beats, and close on the call-to-action. Roughly 40–60 words (~20 seconds), in the target market language. It must voice THIS brief, not generic filler. Original copy only — never read song lyrics.",
     "",
     "Format playbook (respect these time rules and structures):",
     ...playbook,
