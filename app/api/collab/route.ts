@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getTikTokCreators, getTrackAudienceMarkets } from "@/lib/partners/songstats";
+import {
+  getTikTokCreators,
+  getTrackAudienceMarkets,
+  type TikTokCreator,
+} from "@/lib/partners/songstats";
 import { getAnalysis } from "@/lib/partners/musixmatch";
 import { rankCreators, type CreatorCandidate } from "@/lib/collab/rank";
 import { generateStructured } from "@/lib/ai";
@@ -11,6 +15,10 @@ export const maxDuration = 60;
 
 /** How many top leads get an LLM-drafted outreach message. */
 const OUTREACH_TOP_N = 3;
+
+/** Track-less (live-show) opps scan up to this many of the artist's most
+ *  recent catalog tracks to surface real UGC creators. */
+const ARTIST_TRACK_SCAN_LIMIT = 8;
 
 /**
  * Known partner-stack gap (PRD): the available APIs surface real creator
@@ -88,7 +96,7 @@ export async function POST(request: Request) {
   const { data: opp, error: oppErr } = await supabase
     .from("content_opportunities")
     .select(
-      "id, market, language, tracks(id, isrc, title, mxm_track_id, track_intelligence(themes)), briefs(angle)",
+      "id, artist_id, market, language, tracks(id, isrc, title, mxm_track_id, track_intelligence(themes)), artists(name), briefs(angle)",
     )
     .eq("id", opportunityId)
     .single();
@@ -96,60 +104,120 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
   }
 
-  // Event-driven (live-show) opportunities have no catalog track. Creator
-  // discovery is ISRC-driven (Songstats audience + TikTok UGC), so a track-less
-  // signal yields no candidates — return a clean empty radar, not a 404.
-  const track = opp.tracks;
   const oppId = opp.id;
-  const title = track?.title ?? track?.isrc ?? "this track";
+  const ownTrack = opp.tracks;
+  const artistName = opp.artists?.name ?? null;
   const angle = opp.briefs?.find((b) => b.angle)?.angle ?? null;
+
+  // Build the ISRC pool to scan for real TikTok UGC creators. A track-bound
+  // opportunity scans its own track. An event-driven (live-show) opportunity has
+  // no catalog track, so it falls back to the artist's catalog — a major artist's
+  // recent releases are where their real UGC creators actually surface.
+  type ScanTrack = {
+    isrc: string;
+    title: string;
+    mxmTrackId: string | null;
+    themes: string[];
+  };
+  let scanTracks: ScanTrack[] = [];
+  if (ownTrack?.isrc) {
+    scanTracks = [
+      {
+        isrc: ownTrack.isrc,
+        title: ownTrack.title,
+        mxmTrackId: ownTrack.mxm_track_id,
+        themes: ownTrack.track_intelligence?.themes ?? [],
+      },
+    ];
+  } else {
+    // RLS scopes this to the signed-in user's own catalog.
+    const { data: catalog } = await supabase
+      .from("tracks")
+      .select("isrc, title, mxm_track_id, track_intelligence(themes)")
+      .eq("artist_id", opp.artist_id)
+      .not("isrc", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(ARTIST_TRACK_SCAN_LIMIT);
+    scanTracks = (catalog ?? []).flatMap((t) =>
+      t.isrc
+        ? [
+            {
+              isrc: t.isrc,
+              title: t.title,
+              mxmTrackId: t.mxm_track_id,
+              themes: t.track_intelligence?.themes ?? [],
+            },
+          ]
+        : [],
+    );
+  }
+
+  // Context title for outreach drafts: the track, else the artist.
+  const title = ownTrack?.title ?? artistName ?? "this track";
 
   // --- real audience geography (Songstats) → the artist's priority markets ---
   let artistMarkets: string[] = [];
-  if (track?.isrc) {
+  for (const t of scanTracks) {
     try {
-      artistMarkets = (await getTrackAudienceMarkets(track.isrc))
+      const markets = (await getTrackAudienceMarkets(t.isrc))
         .slice(0, 5)
         .map((m) => m.market);
+      if (markets.length) {
+        artistMarkets = markets;
+        break;
+      }
     } catch {
-      artistMarkets = [];
+      // try the next track
     }
   }
   if (artistMarkets.length === 0 && opp.market) artistMarkets = [opp.market];
 
   // --- derived themes (Musixmatch) for values context + rationale -----------
-  let themes: string[] = track?.track_intelligence?.themes ?? [];
-  if (themes.length === 0 && track?.mxm_track_id) {
-    try {
-      themes = (await getAnalysis(track.mxm_track_id)).themes ?? [];
-    } catch {
-      themes = [];
+  let themes: string[] = [...new Set(scanTracks.flatMap((t) => t.themes))];
+  if (themes.length === 0) {
+    const withMxm = scanTracks.find((t) => t.mxmTrackId);
+    if (withMxm?.mxmTrackId) {
+      try {
+        themes = (await getAnalysis(withMxm.mxmTrackId)).themes ?? [];
+      } catch {
+        themes = [];
+      }
     }
   }
 
   // --- candidate pool: real TikTok UGC creators only (no fabrication) --------
+  // Aggregate across the scanned tracks, deduped by handle (highest reach wins),
+  // tracking which track each creator drove so the rationale stays accurate.
   const baseFit = themes.length > 0 ? 0.65 : 0.45;
-  let candidates: CreatorCandidate[] = [];
-  if (track?.isrc) {
-    try {
-      candidates = (await getTikTokCreators(track.isrc)).map((c) => ({
-        handle: c.handle,
-        markets: c.market ? [c.market] : [],
-        reach: c.reach ?? 0,
-        fit: baseFit,
-        source: "songstats-tiktok",
-        rationale: [
-          `Driving TikTok UGC for "${title}"`,
-          c.market ? `in ${c.market}` : null,
-          themes.length ? `· themes: ${themes.slice(0, 3).join(", ")}` : null,
-        ]
-          .filter(Boolean)
-          .join(" "),
-      }));
-    } catch {
-      candidates = [];
-    }
-  }
+  const pool = new Map<string, TikTokCreator & { trackTitle: string }>();
+  await Promise.all(
+    scanTracks.map(async (t) => {
+      try {
+        for (const c of await getTikTokCreators(t.isrc)) {
+          const existing = pool.get(c.handle);
+          if (!existing || (c.reach ?? 0) > (existing.reach ?? 0)) {
+            pool.set(c.handle, { ...c, trackTitle: t.title });
+          }
+        }
+      } catch {
+        // skip tracks Songstats hasn't indexed yet
+      }
+    }),
+  );
+  const candidates: CreatorCandidate[] = [...pool.values()].map((c) => ({
+    handle: c.handle,
+    markets: c.market ? [c.market] : [],
+    reach: c.reach ?? 0,
+    fit: baseFit,
+    source: "songstats-tiktok",
+    rationale: [
+      `Driving TikTok UGC for "${c.trackTitle}"`,
+      c.market ? `in ${c.market}` : null,
+      themes.length ? `· themes: ${themes.slice(0, 3).join(", ")}` : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }));
 
   const ranked = rankCreators(candidates, { artistMarkets });
 

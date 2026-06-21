@@ -17,7 +17,7 @@ export default async function CollabRadarPage({
 
   const { data: opp } = await supabase
     .from("content_opportunities")
-    .select("id, reason, market, language, status, tracks(title, isrc)")
+    .select("id, reason, market, language, status, tracks(title, isrc), artists(name)")
     .eq("id", opportunityId)
     .single();
 
@@ -40,7 +40,8 @@ export default async function CollabRadarPage({
     outreachDraft: l.outreach_draft,
   }));
 
-  const title = opp.tracks?.title ?? opp.tracks?.isrc ?? "Untitled track";
+  const title =
+    opp.tracks?.title ?? opp.tracks?.isrc ?? opp.artists?.name ?? "Untitled signal";
 
   return (
     <div className="space-y-8">
