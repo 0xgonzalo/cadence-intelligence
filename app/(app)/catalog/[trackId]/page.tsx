@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getHookSnippet } from "@/lib/partners/musixmatch";
+import { getTrackAudienceMarkets } from "@/lib/partners/songstats";
+import { performanceMetricLabel } from "@/lib/signal/metric-label";
+import { AnalyzeButton } from "@/components/catalog/AnalyzeButton";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EnergyCurve } from "@/components/catalog/EnergyCurve";
@@ -63,9 +66,18 @@ export default async function TrackIntelligencePage({
       latestByMetric.set(row.metric, { value: row.value, market: row.market });
     }
   }
-  const markets = [
-    ...new Set((signalRows ?? []).map((r) => r.market).filter(Boolean)),
-  ] as string[];
+  // Real top-listener countries are fetched LIVE — momentum signals are all
+  // market="global", so they can't drive the localization gap on their own.
+  let markets: string[] = [];
+  if (track.isrc) {
+    try {
+      markets = (await getTrackAudienceMarkets(track.isrc))
+        .slice(0, 8)
+        .map((m) => m.market);
+    } catch {
+      markets = [];
+    }
+  }
 
   const curve = toCurve(intel?.energy_curve);
   const durationMs = curve.length > 0 ? curve.length * 1000 : 0;
@@ -87,12 +99,15 @@ export default async function TrackIntelligencePage({
   return (
     <div className="space-y-8">
       <div className="border-b border-border pb-6">
-        <Link
-          href="/catalog"
-          className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          ← Catalog
-        </Link>
+        <div className="flex items-start justify-between gap-4">
+          <Link
+            href="/catalog"
+            className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ← Catalog
+          </Link>
+          <AnalyzeButton trackId={track.id} analyzed={Boolean(intel)} />
+        </div>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">{title}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {intel?.mood ? <Badge variant="solid">{intel.mood}</Badge> : null}
@@ -159,8 +174,8 @@ export default async function TrackIntelligencePage({
                   className="flex items-baseline justify-between gap-4 border-b border-border/60 pb-2 last:border-0"
                 >
                   <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                    {metric}
-                    {m.market ? ` · ${m.market}` : ""}
+                    {performanceMetricLabel(metric)}
+                    {m.market && m.market !== "global" ? ` · ${m.market}` : ""}
                   </span>
                   <span className="font-mono text-sm tabular-nums">
                     {fmtNum(m.value)}

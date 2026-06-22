@@ -32,7 +32,28 @@ const AUDIO_LABEL: Record<string, string> = {
   instrumental: "Instrumental",
   acapella: "Acapella",
   voiceover: "Voiceover",
+  soundfx: "Sound FX",
 };
+
+const VOICE_LANGS: { code: string; label: string }[] = [
+  { code: "", label: "Auto (market language)" },
+  { code: "en", label: "English" },
+  { code: "es", label: "Spanish" },
+  { code: "pt", label: "Portuguese" },
+  { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "it", label: "Italian" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+  { code: "hi", label: "Hindi" },
+];
+
+const EMOTIONS: { value: string; label: string }[] = [
+  { value: "neutral", label: "Neutral" },
+  { value: "hype", label: "Hype" },
+  { value: "warm", label: "Warm" },
+  { value: "calm", label: "Calm" },
+];
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v)
@@ -119,6 +140,9 @@ export function PackagePreview({
   const [error, setError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [voiceLang, setVoiceLang] = useState("");
+  const [emotion, setEmotion] = useState("neutral");
+  const [sfxPrompt, setSfxPrompt] = useState("");
 
   function pickFile(f: File | null) {
     setError(null);
@@ -164,6 +188,8 @@ export function PackagePreview({
         setUploading(false);
       }
 
+      const assets = ["instrumental", "voiceover", "lyricClip"];
+      if (sfxPrompt.trim()) assets.push("soundfx");
       const res = await fetch("/api/assets", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -171,6 +197,10 @@ export function PackagePreview({
           opportunityId,
           audioPath,
           audioUrl: !audioPath && audioUrl.trim() ? audioUrl.trim() : undefined,
+          assets,
+          voiceLang: voiceLang || undefined,
+          emotion,
+          sfxPrompt: sfxPrompt.trim() || undefined,
         }),
       });
       await readJson(res, "Asset build failed");
@@ -183,7 +213,7 @@ export function PackagePreview({
     }
   }
 
-  const audioKeys = ["instrumental", "acapella", "voiceover"];
+  const audioKeys = ["instrumental", "acapella", "voiceover", "soundfx"];
   const audioEntries = audioKeys
     .map((k) => ({ key: k, asset: audioAsset(assets?.[k]) }))
     .filter((e): e is { key: string; asset: StoredAsset } => e.asset !== null);
@@ -215,6 +245,12 @@ export function PackagePreview({
         </Button>
       </div>
 
+      <p className="mt-2 max-w-prose text-sm text-muted-foreground">
+        Turn this track into ready-to-post content: a clean instrumental and
+        acapella to remix, an AI voiceover of your brief in any language, a
+        sound-FX sting, and a synced lyric-clip window — all downloadable.
+      </p>
+
       {!hasBriefs ? (
         <p className="mt-3 text-sm text-muted-foreground">
           Generate a brief first — the voiceover is read from the brief copy.
@@ -223,7 +259,8 @@ export function PackagePreview({
         <div className="mt-4 space-y-3">
           <div className="space-y-1">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              Source audio (optional · enables stem separation)
+              Add your master (optional) — we split vocals from the beat for
+              karaoke clips, remix stems & a clean voiceover bed
             </p>
             <label
               onDragOver={(e) => e.preventDefault()}
@@ -273,6 +310,66 @@ export function PackagePreview({
               className="mt-2 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </details>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label
+                htmlFor="voiceLang"
+                className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+              >
+                Voiceover language
+              </label>
+              <select
+                id="voiceLang"
+                value={voiceLang}
+                onChange={(e) => setVoiceLang(e.target.value)}
+                className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {VOICE_LANGS.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label
+                htmlFor="emotion"
+                className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+              >
+                Voiceover delivery
+              </label>
+              <select
+                id="emotion"
+                value={emotion}
+                onChange={(e) => setEmotion(e.target.value)}
+                className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {EMOTIONS.map((em) => (
+                  <option key={em.value} value={em.value}>
+                    {em.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="sfxPrompt"
+              className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+            >
+              Sound FX (optional · describe a sting or riser)
+            </label>
+            <input
+              id="sfxPrompt"
+              type="text"
+              value={sfxPrompt}
+              onChange={(e) => setSfxPrompt(e.target.value)}
+              placeholder="deep cinematic riser + vinyl crackle"
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
         </div>
       )}
 
@@ -335,8 +432,9 @@ export function PackagePreview({
 
       {!hasPackage && hasBriefs ? (
         <p className="mt-4 text-sm text-muted-foreground">
-          Assemble stems, a voiceover and a lyric-clip window into a downloadable
-          package.
+          Hit Build to generate your kit — stems, an AI voiceover of the brief
+          script (pick the language and delivery above), an optional sound-FX
+          sting, and a synced lyric-clip window, all ready to download and post.
         </p>
       ) : null}
     </Card>

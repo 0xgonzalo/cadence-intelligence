@@ -7,6 +7,7 @@ import {
   PackagePreview,
   type PackageAssets,
 } from "@/components/engine/PackagePreview";
+import { CaptionCards } from "@/components/engine/CaptionCards";
 import { momentumReason } from "@/lib/signal/metric-label";
 
 export const dynamic = "force-dynamic";
@@ -148,6 +149,8 @@ export default async function ContentEnginePage({
         assets={(pkg?.assets ?? null) as PackageAssets}
         hasBriefs={briefs.length > 0}
       />
+
+      <CaptionCards opportunityId={opportunityId} />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { NavLinks } from "@/components/nav-links";
 import { RosterSidebar } from "@/components/roster-sidebar";
@@ -27,9 +28,14 @@ export default async function AppLayout({
                 <span className="absolute inset-0 animate-signal rounded-full bg-brand" />
                 <span className="relative size-2 rounded-full bg-brand" />
               </span>
-              <span className="font-mono text-xs uppercase tracking-[0.3em] transition-colors group-hover:text-brand-bright">
-                Cadence
-              </span>
+              <Image
+                src="/logo.png"
+                alt="Cadence"
+                width={858}
+                height={210}
+                priority
+                className="h-7 w-auto transition-opacity group-hover:opacity-80"
+              />
             </Link>
             <NavLinks />
           </div>

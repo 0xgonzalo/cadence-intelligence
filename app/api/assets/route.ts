@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { uploadAudio, requestSplit, pollSplit } from "@/lib/partners/lalal";
-import { tts, DEFAULT_VOICE_ID } from "@/lib/partners/elevenlabs";
+import {
+  tts,
+  soundEffect,
+  DEFAULT_VOICE_ID,
+  EMOTION_PRESETS,
+  isEmotion,
+  type Emotion,
+} from "@/lib/partners/elevenlabs";
+import { translate } from "@/lib/generation/translate";
 import { getRichsync } from "@/lib/partners/musixmatch";
 import { fetchWithTimeout, assertSafeUrl } from "@/lib/http";
 import { normalizeAudioUrl, isInOpportunityScope } from "@/lib/audio-url";
@@ -17,13 +25,19 @@ const BUCKET = "packages";
 /** Signed-URL lifetime — kept short to match the ephemeral-asset policy. */
 const SIGNED_URL_TTL = 60 * 60 * 12;
 
-type AssetType = "instrumental" | "acapella" | "voiceover" | "lyricClip";
+type AssetType =
+  | "instrumental"
+  | "acapella"
+  | "voiceover"
+  | "lyricClip"
+  | "soundfx";
 const DEFAULT_ASSETS: AssetType[] = ["instrumental", "voiceover", "lyricClip"];
 const ASSET_TYPES = new Set<AssetType>([
   "instrumental",
   "acapella",
   "voiceover",
   "lyricClip",
+  "soundfx",
 ]);
 
 type ServiceClient = ReturnType<typeof createServiceClient>;
@@ -119,6 +133,9 @@ export async function POST(request: Request) {
   let audioUrl: string | undefined;
   let audioPath: string | undefined;
   let requested: AssetType[] = DEFAULT_ASSETS;
+  let voiceLang: string | undefined;
+  let emotion: Emotion | undefined;
+  let sfxPrompt: string | undefined;
   try {
     const raw = await request.json();
     if (raw && typeof raw === "object") {
@@ -127,10 +144,20 @@ export async function POST(request: Request) {
         audioUrl?: string;
         audioPath?: string;
         assets?: unknown;
+        voiceLang?: string;
+        emotion?: string;
+        sfxPrompt?: string;
       };
       opportunityId = body.opportunityId;
       audioUrl = body.audioUrl;
       audioPath = body.audioPath;
+      if (typeof body.voiceLang === "string" && body.voiceLang.trim()) {
+        voiceLang = body.voiceLang.trim();
+      }
+      if (isEmotion(body.emotion)) emotion = body.emotion;
+      if (typeof body.sfxPrompt === "string" && body.sfxPrompt.trim()) {
+        sfxPrompt = body.sfxPrompt.trim().slice(0, 300);
+      }
       if (Array.isArray(body.assets)) {
         const picked = body.assets.filter(
           (a): a is AssetType =>
@@ -253,12 +280,19 @@ export async function POST(request: Request) {
   if (requested.includes("voiceover")) {
     try {
       const brief = pickBrief(briefs, intel?.language ?? null);
-      const text = brief ? voiceoverText(brief.copy) : "";
+      let text = brief ? voiceoverText(brief.copy) : "";
       if (!text) {
         results.voiceover = { skipped: "no brief copy to voice" };
       } else {
-        const lang = brief?.language ?? undefined;
-        const bytes = await tts(text, DEFAULT_VOICE_ID, lang);
+        const briefLang = brief?.language ?? undefined;
+        const lang = voiceLang ?? briefLang;
+        // The TTS model voices pronunciation by language but does NOT translate,
+        // so translate the script when the chosen language differs from source.
+        if (voiceLang && voiceLang !== briefLang) {
+          text = await translate(text, voiceLang);
+        }
+        const voiceSettings = emotion ? EMOTION_PRESETS[emotion] : undefined;
+        const bytes = await tts(text, DEFAULT_VOICE_ID, lang, { voiceSettings });
         const stored = await storeAudio(
           service,
           `${oppId}/voiceover-${lang ?? "src"}.mp3`,
@@ -267,7 +301,7 @@ export async function POST(request: Request) {
         );
         results.voiceover =
           stored && typeof stored === "object" && !Array.isArray(stored)
-            ? { ...stored, language: lang ?? null }
+            ? { ...stored, language: lang ?? null, emotion: emotion ?? null }
             : stored;
       }
     } catch (e) {
@@ -301,6 +335,25 @@ export async function POST(request: Request) {
       }
     } catch (e) {
       results.lyricClip = { error: errMsg(e) };
+    }
+  }
+
+  // --- sound fx (ElevenLabs sound-generation from a text prompt) -----------
+  if (requested.includes("soundfx")) {
+    try {
+      if (!sfxPrompt) {
+        results.soundfx = { skipped: "no sound-fx prompt provided" };
+      } else {
+        const bytes = await soundEffect(sfxPrompt, { durationSeconds: 10 });
+        results.soundfx = await storeAudio(
+          service,
+          `${oppId}/soundfx.mp3`,
+          bytes,
+          "audio/mpeg",
+        );
+      }
+    } catch (e) {
+      results.soundfx = { error: errMsg(e) };
     }
   }
 

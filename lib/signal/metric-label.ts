@@ -37,6 +37,49 @@ export function metricLabel(metric: string): string {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
+/**
+ * Friendly base nouns for the performance panel, where — unlike momentum
+ * deltas — the `_current` vs `_total` distinction is meaningful and must be
+ * preserved rather than stripped.
+ */
+const PERFORMANCE_BASE_LABELS: Record<string, string> = {
+  popularity: "popularity",
+  spotify_popularity: "Spotify popularity",
+  playlists: "playlists",
+  playlist_reach: "playlist reach",
+  charts: "charts",
+  streams: "streams",
+  spotify_streams: "Spotify streams",
+  shazams: "Shazams",
+  tiktok_videos: "TikTok videos",
+  tiktok_views: "TikTok views",
+  youtube_views: "YouTube views",
+};
+
+const PERFORMANCE_QUALIFIERS: Record<string, string> = {
+  current: "Current",
+  total: "Total",
+  all_time: "All-time",
+};
+
+/**
+ * Humanizes a raw signal metric key for the performance panel, keeping the
+ * current/total qualifier and surfacing it as a leading word so
+ * `popularity_current` reads as "Current popularity" instead of leaking the
+ * variable name.
+ */
+export function performanceMetricLabel(metric: string): string {
+  if (!metric) return "Signal";
+  const key = metric.toLowerCase();
+  const match = key.match(/^(.*?)_(current|total|all_time)$/);
+  if (match) {
+    const [, base, suffix] = match;
+    const baseLabel = PERFORMANCE_BASE_LABELS[base] ?? base.replace(/_/g, " ");
+    return `${PERFORMANCE_QUALIFIERS[suffix]} ${baseLabel}`;
+  }
+  return PERFORMANCE_BASE_LABELS[key] ?? metricLabel(metric);
+}
+
 /** The one-line "why" for a momentum opportunity, with a human metric label. */
 export function momentumReason(
   metric: string,

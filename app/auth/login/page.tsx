@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useActionState } from "react";
 import { signInWithEmail, type SignInState } from "../actions";
 
@@ -67,9 +68,18 @@ export default function LoginPage() {
 
       {/* ── Centered hero ── */}
       <div className="relative mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-7 px-6 py-16 text-center">
+        <Image
+          src="/logo.png"
+          alt="Cadence Intelligence"
+          width={196}
+          height={48}
+          priority
+          className="animate-rise h-12 w-auto"
+          style={{ animationDelay: "0ms" }}
+        />
         <p
           className="animate-rise flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.32em] text-muted-foreground"
-          style={{ animationDelay: "0ms" }}
+          style={{ animationDelay: "80ms" }}
         >
           <span className="relative flex size-2">
             <span className="absolute inset-0 animate-signal rounded-full bg-brand" />
