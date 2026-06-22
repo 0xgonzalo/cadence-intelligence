@@ -7,8 +7,20 @@ export const runtime = "nodejs";
 const CONFIG_COLS =
   "id, artist_id, cadence, thresholds, formats, brand_voice, push_targets";
 
-/** The signed-in user's primary artist (RLS already scopes to their catalog). */
-async function resolveArtist(supabase: DbClient) {
+/**
+ * Resolve the target artist. RLS scopes `artists` to the user's roster, so an
+ * explicit `artistId` that returns a row is implicitly ownership-verified. When
+ * it's absent or not theirs, fall back to their first-onboarded artist.
+ */
+async function resolveArtist(supabase: DbClient, artistId?: string | null) {
+  if (artistId) {
+    const { data } = await supabase
+      .from("artists")
+      .select("id, name")
+      .eq("id", artistId)
+      .maybeSingle();
+    if (data) return data;
+  }
   const { data } = await supabase
     .from("artists")
     .select("id, name")
@@ -50,15 +62,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const artist = await resolveArtist(supabase);
-  if (!artist) {
-    return NextResponse.json(
-      { error: "Onboard an artist before configuring the agent" },
-      { status: 400 },
-    );
-  }
-
   let body: {
+    artistId?: string;
     cadence?: string | null;
     accelerationPct?: number;
     formats?: unknown;
@@ -70,6 +75,14 @@ export async function POST(request: Request) {
     if (raw && typeof raw === "object") body = raw as typeof body;
   } catch {
     // Empty/invalid body — persist defaults below.
+  }
+
+  const artist = await resolveArtist(supabase, body.artistId);
+  if (!artist) {
+    return NextResponse.json(
+      { error: "Onboard an artist before configuring the agent" },
+      { status: 400 },
+    );
   }
 
   const formats = Array.isArray(body.formats)

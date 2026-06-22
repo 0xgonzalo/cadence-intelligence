@@ -25,10 +25,12 @@ export async function POST(request: Request) {
     !!secret && request.headers.get("authorization") === `Bearer ${secret}`;
 
   let opportunityId: string | undefined;
+  let artistId: string | undefined;
   try {
     const raw = await request.json();
     if (raw && typeof raw === "object") {
       opportunityId = (raw as { opportunityId?: string }).opportunityId;
+      artistId = (raw as { artistId?: string }).artistId;
     }
   } catch {
     // No body — fall back to picking the newest `new` opportunity.
@@ -53,10 +55,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
     } else {
-      const { data: next } = await rls
+      let pick = rls
         .from("content_opportunities")
         .select("id")
-        .eq("status", "new")
+        .eq("status", "new");
+      if (artistId) pick = pick.eq("artist_id", artistId);
+      const { data: next } = await pick
         .order("detected_at", { ascending: false })
         .limit(1)
         .maybeSingle();

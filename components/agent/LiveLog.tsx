@@ -35,20 +35,22 @@ function time(ts: string): string {
   }
 }
 
-export function LiveLog() {
+export function LiveLog({ artistId }: { artistId: string | null }) {
   const [rows, setRows] = useState<LogRow[]>([]);
   const [running, setRunning] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const supabaseRef = useRef(createClient());
 
   const load = useCallback(async () => {
-    const { data } = await supabaseRef.current
+    let query = supabaseRef.current
       .from("agent_log")
       .select("id, level, phase, message, created_at")
       .order("created_at", { ascending: false })
       .limit(60);
+    if (artistId) query = query.eq("artist_id", artistId);
+    const { data } = await query;
     if (data) setRows(data as LogRow[]);
-  }, []);
+  }, [artistId]);
 
   useEffect(() => {
     load();
@@ -63,7 +65,7 @@ export function LiveLog() {
       const res = await fetch("/api/agent/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(artistId ? { artistId } : {}),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Run failed");

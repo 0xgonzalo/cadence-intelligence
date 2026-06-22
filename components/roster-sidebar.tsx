@@ -57,7 +57,8 @@ export function RosterSidebar({ artists }: { artists: SidebarArtist[] }) {
   const activeArtist = searchParams.get("artist");
   const onRadar = pathname === "/radar";
   const onCatalog = pathname === "/catalog";
-  const basePath = onCatalog ? "/catalog" : "/radar";
+  const onAgent = pathname === "/agent";
+  const basePath = onCatalog ? "/catalog" : onAgent ? "/agent" : "/radar";
 
   const collapsed = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
@@ -120,7 +121,8 @@ export function RosterSidebar({ artists }: { artists: SidebarArtist[] }) {
         {artists.length > 0 ? (
           <nav className="flex flex-col gap-1">
             {artists.map((a) => {
-              const active = (onRadar || onCatalog) && activeArtist === a.id;
+              const active =
+                (onRadar || onCatalog || onAgent) && activeArtist === a.id;
               return (
                 <Link
                   key={a.id}

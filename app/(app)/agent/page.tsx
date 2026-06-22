@@ -20,15 +20,32 @@ function discordOf(pushTargets: unknown): string | null {
   return null;
 }
 
-export default async function AgentPage() {
+export default async function AgentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ artist?: string }>;
+}) {
+  const { artist: artistParam } = await searchParams;
   const supabase = await createClient();
 
-  const { data: artist } = await supabase
-    .from("artists")
-    .select("id, name")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  // The selected artist (RLS scopes to the user's roster); fall back to their
+  // first-onboarded artist when no valid selection is present.
+  const { data: selected } = artistParam
+    ? await supabase
+        .from("artists")
+        .select("id, name")
+        .eq("id", artistParam)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: artist } = selected
+    ? { data: selected }
+    : await supabase
+        .from("artists")
+        .select("id, name")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
   const { data: config } = artist
     ? await supabase
@@ -63,14 +80,14 @@ export default async function AgentPage() {
       </div>
 
       {artist ? (
-        <ConfigForm initial={initial} />
+        <ConfigForm artistId={artist.id} initial={initial} />
       ) : (
         <p className="text-sm text-muted-foreground">
           Onboard an artist on the Radar to configure the agent.
         </p>
       )}
 
-      <LiveLog />
+      <LiveLog artistId={artist?.id ?? null} />
     </div>
   );
 }

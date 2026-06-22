@@ -31,7 +31,13 @@ const labelCls =
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/40";
 
-export function ConfigForm({ initial }: { initial: AgentConfigValues }) {
+export function ConfigForm({
+  artistId,
+  initial,
+}: {
+  artistId: string;
+  initial: AgentConfigValues;
+}) {
   const router = useRouter();
   const [cadence, setCadence] = useState(initial.cadence ?? "daily");
   const [accel, setAccel] = useState(initial.accelerationPct);
@@ -57,6 +63,7 @@ export function ConfigForm({ initial }: { initial: AgentConfigValues }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          artistId,
           cadence,
           accelerationPct: accel,
           formats,
